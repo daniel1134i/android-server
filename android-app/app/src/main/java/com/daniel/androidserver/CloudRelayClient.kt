@@ -295,6 +295,21 @@ class CloudRelayClient(
                     JSONObject().put("status", "ok")
                 }
 
+                path == "/api/reset" -> {
+                    synchronized(ServerService.logRing) {
+                        ServerService.logRing.clear()
+                    }
+                    val newCreds = resetCredentials()
+                    ServerService.addLog("[СБРОС] Хост-нода успешно сброшена к заводским настройкам через Cloud RPC", "SYSTEM")
+                    JSONObject().apply {
+                        put("status", "reset_ok")
+                        put("node_id", newCreds.first)
+                        put("secret_key", newCreds.second)
+                        put("message", "Хост-нода сброшена к заводским настройкам")
+                        put("timestamp", System.currentTimeMillis())
+                    }
+                }
+
                 path.startsWith("/api/files") -> {
                     var reqPath = bodyJson.optString("path", "")
                     if (reqPath.isEmpty() && path.contains("path=")) {

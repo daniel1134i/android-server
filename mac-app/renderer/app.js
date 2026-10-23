@@ -1,8 +1,18 @@
+// 🛡️ Глобальная защита от сбоев в Renderer
+window.addEventListener('error', (event) => {
+  console.error('[Renderer Uncaught Error]', event.error || event.message);
+});
+window.addEventListener('unhandledrejection', (event) => {
+  console.warn('[Renderer Unhandled Rejection]', event.reason);
+  event.preventDefault();
+});
+
 const USB_HOST = '127.0.0.1';
 let wifiHost = (typeof localStorage !== 'undefined' ? localStorage.getItem('android_wifi_host') : null) || '192.168.0.82';
 let serverPort = 8080;
 let activeChannel = 'usb'; // 'usb' | 'wifi' | 'cloud'
 let isConnected = false;
+let isResetting = false;
 let currentPath = '/sdcard';
 let pollInterval = null;
 
@@ -12,22 +22,33 @@ let cloudSecretKey = (typeof localStorage !== 'undefined' ? localStorage.getItem
 let cloudRelayUrl = (typeof localStorage !== 'undefined' ? localStorage.getItem('cloud_relay_url') : null) || 'ws://192.168.0.199:8088';
 let cloudWs = null;
 let cloudIsReady = false;
+let cloudReconnectTimer = null;
 const pendingCloudRpc = new Map();
 
+function cancelPendingCloudRpc(reason = 'Соединение Cloud Relay разорвано') {
+  for (const [id, p] of pendingCloudRpc.entries()) {
+    clearTimeout(p.timer);
+    try { p.reject(new Error(reason)); } catch (_) {}
+  }
+  pendingCloudRpc.clear();
+}
+
 function initCloudRelay() {
-  if (!cloudNodeId || !cloudSecretKey || !cloudRelayUrl) return;
+  if (isResetting || !cloudNodeId || !cloudSecretKey || !cloudRelayUrl) return;
   if (cloudWs && (cloudWs.readyState === WebSocket.OPEN || cloudWs.readyState === WebSocket.CONNECTING)) return;
 
   try {
     cloudWs = new WebSocket(cloudRelayUrl);
 
     cloudWs.onopen = () => {
-      cloudWs.send(JSON.stringify({
-        type: 'register',
-        role: 'controller',
-        nodeId: cloudNodeId,
-        token: cloudSecretKey
-      }));
+      try {
+        cloudWs.send(JSON.stringify({
+          type: 'register',
+          role: 'controller',
+          nodeId: cloudNodeId,
+          token: cloudSecretKey
+        }));
+      } catch (_) {}
     };
 
     cloudWs.onmessage = (evt) => {
@@ -46,7 +67,11 @@ function initCloudRelay() {
           if (p) {
             clearTimeout(p.timer);
             pendingCloudRpc.delete(msg.id);
-            p.resolve(msg.data);
+            if (msg.status && msg.status >= 400) {
+              p.reject(new Error(msg.data?.error || `HTTP ${msg.status}`));
+            } else {
+              p.resolve(msg.data);
+            }
           }
         }
       } catch (_) {}
@@ -55,12 +80,17 @@ function initCloudRelay() {
     cloudWs.onclose = () => {
       cloudIsReady = false;
       updateCloudUi(false);
-      setTimeout(initCloudRelay, 4000);
+      cancelPendingCloudRpc();
+      if (!isResetting && cloudNodeId && cloudSecretKey) {
+        if (cloudReconnectTimer) clearTimeout(cloudReconnectTimer);
+        cloudReconnectTimer = setTimeout(initCloudRelay, 4000);
+      }
     };
 
     cloudWs.onerror = () => {
       cloudIsReady = false;
       updateCloudUi(false);
+      cancelPendingCloudRpc('Ошибка соединения Cloud Relay');
     };
   } catch (_) {}
 }
@@ -77,7 +107,13 @@ function sendCloudRpc(path, method = 'GET', body = null, timeoutMs = 8000) {
     }, timeoutMs);
 
     pendingCloudRpc.set(id, { resolve, reject, timer });
-    cloudWs.send(JSON.stringify({ rpc: 'req', id, path, method, body }));
+    try {
+      cloudWs.send(JSON.stringify({ rpc: 'req', id, path, method, body }));
+    } catch (e) {
+      clearTimeout(timer);
+      pendingCloudRpc.delete(id);
+      reject(e);
+    }
   });
 }
 
@@ -232,6 +268,7 @@ function formatSeconds(sec) {
 
 // Опрос телеметрии с трехканальным отказоустойчивым переключением (USB <-> Wi-Fi <-> Cloud Relay)
 async function fetchTelemetry() {
+  if (isResetting) return;
   const t0 = performance.now();
   let data = null;
   let channel = activeChannel;
@@ -326,7 +363,7 @@ async function fetchTelemetry() {
     const latency = Math.round(performance.now() - t0);
 
     // Автоматически обучаемся и сохраняем актуальный Wi-Fi IP планшета
-    if (data.network && data.network.ip && data.network.ip !== '127.0.0.1') {
+    if (!isResetting && data.network && data.network.ip && data.network.ip !== '127.0.0.1') {
       if (wifiHost !== data.network.ip) {
         wifiHost = data.network.ip;
         if (typeof localStorage !== 'undefined') {
@@ -336,7 +373,7 @@ async function fetchTelemetry() {
     }
 
     // Автоматическая привязка учетных данных Cloud Relay при первом локальном контакте
-    if (data.cloud && data.cloud.node_id) {
+    if (!isResetting && data.cloud && data.cloud.node_id) {
       let changed = false;
       if (!cloudNodeId) {
         cloudNodeId = data.cloud.node_id;
@@ -349,7 +386,7 @@ async function fetchTelemetry() {
         changed = true;
       }
       syncCloudInputs();
-      if (changed || !cloudIsReady) {
+      if ((changed || !cloudIsReady) && !isResetting) {
         initCloudRelay();
       }
     }
@@ -854,7 +891,7 @@ if (btnConnectCloud) {
 }
 
 // ========================================================
-// ⚠️ СБРОС ВСЕХ НАСТРОЕК И СОЕДИНЕНИЯ К ЗАВОДСКИМ (С НУЛЯ)
+// ⚠️ ПОЛНЫЙ СБРОС К ЗАВОДСКИМ НАСТРОЙКАМ (ПЛАНШЕТ + MAC)
 // ========================================================
 const btnFactoryReset = document.getElementById('btnFactoryReset');
 const txtFactoryResetStatus = document.getElementById('txtFactoryResetStatus');
@@ -862,42 +899,102 @@ const txtFactoryResetStatus = document.getElementById('txtFactoryResetStatus');
 if (btnFactoryReset) {
   btnFactoryReset.addEventListener('click', async () => {
     const ok = confirm(
-      "⚠️ ВНИМАНИЕ: СБРОС К ЗАВОДСКИМ НАСТРОЙКАМ\n\n" +
-      "Это действие полностью сбросит соединение с сервером:\n" +
-      "• Будут удалены все сохраненные IP-адреса Wi-Fi\n" +
-      "• Будут удалены облачный ID ноды и секретные ключи\n" +
-      "• Будет очищен кэш приложения и сессий\n\n" +
-      "Приложение вернется к состоянию чистого первого запуска.\n\n" +
-      "Сбросить все настройки?"
+      "⚠️ ВНИМАНИЕ: ПОЛНЫЙ СБРОС К ЗАВОДСКИМ НАСТРОЙКАМ\n\n" +
+      "Это действие полностью сбросит хост-сервер на планшете и Mac контроллер:\n" +
+      "• На планшете сгенерируются новые ID ноды и ключ безопасности\n" +
+      "• Все логи сервера на планшете будут очищены\n" +
+      "• На Mac будут удалены все сохраненные IP-адреса, ключи, кэш и сессии\n\n" +
+      "Выполнить полный сброс к заводским настройкам?"
     );
     if (!ok) return;
 
+    isResetting = true;
     btnFactoryReset.disabled = true;
-    btnFactoryReset.textContent = '⏳ СБРОС НАСТРОЕК...';
+    btnFactoryReset.textContent = '⏳ СБРОС К ЗАВОДСКИМ...';
     if (txtFactoryResetStatus) {
-      txtFactoryResetStatus.textContent = 'Очистка кэша и учетных данных...';
+      txtFactoryResetStatus.textContent = 'Отправка команды сброса на планшет по всем каналам...';
       txtFactoryResetStatus.style.color = 'var(--agy-amber)';
     }
 
+    // Приостанавливаем циклический опрос
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+
     try {
-      // 1. Закрываем облачный вебсокет
+      // 1. Отправляем /api/reset на Android планшет по всем доступным каналам параллельно
+      const resetPromises = [];
+
+      // Функция безопасного fetch с таймаутом
+      const fetchReset = (url, timeoutMs = 2500) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        return fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          cache: 'no-store'
+        }).then(async (res) => {
+          clearTimeout(timer);
+          return res.ok ? await res.json() : null;
+        }).catch(() => {
+          clearTimeout(timer);
+          return null;
+        });
+      };
+
+      // Канал USB (adb loopback)
+      resetPromises.push(fetchReset(`http://${USB_HOST}:${serverPort}/api/reset`));
+
+      // Канал Wi-Fi (если известен IP)
+      if (wifiHost && wifiHost !== USB_HOST) {
+        resetPromises.push(fetchReset(`http://${wifiHost}:${serverPort}/api/reset`));
+      }
+
+      // Текущий хост из поля ввода (если отличается)
+      if (inputHost && inputHost.value && inputHost.value !== USB_HOST && inputHost.value !== wifiHost) {
+        resetPromises.push(fetchReset(`http://${inputHost.value.trim()}:${serverPort}/api/reset`));
+      }
+
+      // Канал Cloud Relay RPC (если активен)
+      if (cloudWs && cloudIsReady) {
+        resetPromises.push(
+          sendCloudRpc('/api/reset', 'POST', {}, 3000)
+            .catch(() => null)
+        );
+      }
+
+      // Дожидаемся результатов отправки сброса на планшет
+      await Promise.allSettled(resetPromises);
+
+      if (txtFactoryResetStatus) {
+        txtFactoryResetStatus.textContent = 'Очистка локальных данных Mac контроллера...';
+      }
+
+      // 2. Закрываем облачный WebSocket и отменяем все висящие RPC
+      if (cloudReconnectTimer) {
+        clearTimeout(cloudReconnectTimer);
+        cloudReconnectTimer = null;
+      }
       if (cloudWs) {
         try { cloudWs.close(); } catch (_) {}
         cloudWs = null;
         cloudIsReady = false;
       }
+      cancelPendingCloudRpc('Сброс настроек приложения');
 
-      // 2. Очищаем LocalStorage браузера / Electron
+      // 3. Очищаем LocalStorage
       if (typeof localStorage !== 'undefined') {
-        localStorage.clear();
+        try { localStorage.clear(); } catch (_) {}
       }
 
-      // 3. Вызываем Electron API для глубокой очистки сессии на диске
+      // 4. Очищаем дисковые сессии Electron (cookies, кэш, storage)
       if (window.electronAPI && typeof window.electronAPI.factoryReset === 'function') {
-        await window.electronAPI.factoryReset();
+        try { await window.electronAPI.factoryReset(); } catch (_) {}
       }
 
-      // 4. Сбрасываем переменные в памяти
+      // 5. Сбрасываем переменные состояния в памяти
       wifiHost = '';
       cloudNodeId = '';
       cloudSecretKey = '';
@@ -905,15 +1002,16 @@ if (btnFactoryReset) {
       serverPort = 8080;
       activeChannel = 'usb';
       isConnected = false;
+      currentPath = '/sdcard';
 
-      // 5. Очищаем поля ввода
+      // 6. Очищаем поля формы
       if (inputHost) inputHost.value = '127.0.0.1';
       if (inputPort) inputPort.value = '8080';
       if (inputCloudNodeId) inputCloudNodeId.value = '';
       if (inputCloudSecretKey) inputCloudSecretKey.value = '';
       if (inputCloudRelayUrl) inputCloudRelayUrl.value = 'ws://192.168.0.199:8088';
 
-      // 6. Сбрасываем бейджи и баннеры
+      // 7. Сбрасываем бейджи и баннеры в состояние первого запуска
       if (badgePairStatus) {
         badgePairStatus.className = 'badge badge-dim';
         badgePairStatus.textContent = 'ГОТОВО К ПОИСКУ';
@@ -939,12 +1037,22 @@ if (btnFactoryReset) {
         valDaemonStatus.textContent = 'Сброшено';
       }
 
+      // 8. Сбрасываем метрики
+      if (valUptime) valUptime.textContent = '--';
+      if (valSysUptime) valSysUptime.textContent = '--';
+      if (valBatteryPercent) valBatteryPercent.textContent = '--%';
+      if (barBatteryFill) barBatteryFill.style.width = '0%';
+      if (valRamText) valRamText.textContent = '-- / --';
+      if (barRamFill) barRamFill.style.width = '0%';
+      if (valDiskText) valDiskText.textContent = '-- / --';
+      if (barDiskFill) barDiskFill.style.width = '0%';
+
       if (txtFactoryResetStatus) {
-        txtFactoryResetStatus.textContent = '✓ Все настройки сброшены к заводским! Приложение готово к новому первому запуску.';
+        txtFactoryResetStatus.textContent = '✓ Полный сброс выполнен! Планшет и Mac возвращены к заводским настройкам.';
         txtFactoryResetStatus.style.color = 'var(--agy-green)';
         setTimeout(() => {
           if (txtFactoryResetStatus) txtFactoryResetStatus.textContent = '';
-        }, 5000);
+        }, 6000);
       }
     } catch (err) {
       if (txtFactoryResetStatus) {
@@ -952,8 +1060,11 @@ if (btnFactoryReset) {
         txtFactoryResetStatus.style.color = 'var(--agy-coral)';
       }
     } finally {
+      isResetting = false;
       btnFactoryReset.disabled = false;
-      btnFactoryReset.textContent = '🗑 СБРОСИТЬ ВСЕ НАСТРОЙКИ С НУЛЯ';
+      btnFactoryReset.textContent = '⚠️ Сбросить к заводским';
+      // Перезапускаем опрос телеметрии в чистом состоянии
+      pollInterval = setInterval(fetchTelemetry, 2500);
     }
   });
 }
@@ -1403,10 +1514,11 @@ setInterval(fetchRemoteLogs, 2000);
 
 // Автопоиск ноды в локальной сети по mDNS раз в 10 сек
 async function autoScanBonjour() {
+  if (isResetting) return;
   try {
     if (window.electronAPI && typeof window.electronAPI.discoverBonjour === 'function') {
       const res = await window.electronAPI.discoverBonjour();
-      if (res && res.success && res.ip && res.ip !== '127.0.0.1') {
+      if (res && res.success && res.ip && res.ip !== '127.0.0.1' && !isResetting) {
         if (wifiHost !== res.ip) {
           wifiHost = res.ip;
           if (typeof localStorage !== 'undefined') localStorage.setItem('android_wifi_host', wifiHost);
@@ -1420,7 +1532,7 @@ setInterval(autoScanBonjour, 10000);
 
 // Фоновая проверка восстановления USB-кабеля (если работаем по Wi-Fi или Облаку)
 async function checkUsbReconnection() {
-  if (activeChannel !== 'wifi' && activeChannel !== 'cloud') return;
+  if (isResetting || (activeChannel !== 'wifi' && activeChannel !== 'cloud')) return;
   try {
     if (window.electronAPI && typeof window.electronAPI.forwardAdb === 'function') {
       const fwd = await window.electronAPI.forwardAdb(serverPort);
