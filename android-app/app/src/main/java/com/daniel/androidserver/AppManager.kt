@@ -118,6 +118,12 @@ object AppManager {
                 .directory(dir)
                 .redirectErrorStream(true)
 
+            val env = pb.environment()
+            env["HOME"] = dir.absolutePath
+            env["TMPDIR"] = dir.absolutePath
+            env["USER"] = "android"
+            env["PATH"] = "${dir.absolutePath}:/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin:" + (env["PATH"] ?: "")
+
             // Запись вывода в файл лога с ротацией при превышении 3 МБ
             val process = pb.start()
             val pid = extractPid(process)
