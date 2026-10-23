@@ -86,7 +86,7 @@ class CloudRelayClient(
         }
     }
 
-    fun resetCredentials(): Pair<String, String> {
+    fun resetCredentials(reconnectDelayMs: Long = 600L): Pair<String, String> {
         val newNid = "node_" + UUID.randomUUID().toString().substring(0, 8)
         val newKey = "sec_" + UUID.randomUUID().toString().replace("-", "")
         prefs.edit()
@@ -96,8 +96,11 @@ class CloudRelayClient(
         nodeId = newNid
         secretKey = newKey
         if (isRunning) {
-            stop()
-            start()
+            Thread {
+                try { Thread.sleep(reconnectDelayMs) } catch (_: Exception) {}
+                stop()
+                start()
+            }.start()
         }
         return Pair(newNid, newKey)
     }
