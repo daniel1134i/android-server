@@ -32,9 +32,11 @@ class ServerService : Service() {
                 put("level", level)
                 put("message", msg)
             }
-            logRing.add(entry)
-            while (logRing.size > 300) {
-                try { logRing.removeAt(0) } catch (_: Exception) {}
+            synchronized(logRing) {
+                logRing.add(entry)
+                while (logRing.size > 300) {
+                    try { logRing.removeAt(0) } catch (_: Exception) {}
+                }
             }
         }
     }

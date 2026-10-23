@@ -37,6 +37,7 @@ class CloudRelayClient(
 
     private val handler = Handler(Looper.getMainLooper())
     private var reconnectAttempts = 0
+    private val rpcExecutor = java.util.concurrent.Executors.newFixedThreadPool(6)
 
     init {
         // Загрузка или генерация уникальных учетных данных ноды
@@ -64,6 +65,7 @@ class CloudRelayClient(
     fun stop() {
         isRunning = false
         isConnected = false
+        handler.removeCallbacksAndMessages(null)
         try {
             webSocket?.close(1000, "Service stopped")
         } catch (_: Exception) {}
@@ -85,11 +87,13 @@ class CloudRelayClient(
     private fun connect() {
         if (!isRunning) return
         try {
-            okHttpClient = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(0, TimeUnit.SECONDS)
-                .pingInterval(20, TimeUnit.SECONDS)
-                .build()
+            if (okHttpClient == null) {
+                okHttpClient = OkHttpClient.Builder()
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(0, TimeUnit.SECONDS)
+                    .pingInterval(20, TimeUnit.SECONDS)
+                    .build()
+            }
 
             val request = Request.Builder()
                 .url(relayUrl)
@@ -164,8 +168,8 @@ class CloudRelayClient(
                 val method = json.optString("method", "GET").uppercase()
                 val bodyObj = json.opt("body")
 
-                // Выполняем запрос в фоновом потоке и возвращаем ответ
-                Thread {
+                // Выполняем запрос в пуле потоков и возвращаем ответ
+                rpcExecutor.execute {
                     val respData = dispatchRpc(path, method, bodyObj)
                     val respMsg = JSONObject().apply {
                         put("rpc", "res")
@@ -176,7 +180,7 @@ class CloudRelayClient(
                     try {
                         ws.send(respMsg.toString())
                     } catch (_: Exception) {}
-                }.start()
+                }
             }
         } catch (e: Exception) {
             logCallback("[ОБЛАКО] Ошибка обработки RPC: ${e.message}")
@@ -320,12 +324,31 @@ class CloudRelayClient(
     private fun executeShell(cmd: String): JSONObject {
         val t0 = System.currentTimeMillis()
         val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-        val stdout = p.inputStream.bufferedReader().use { it.readText() }
-        val stderr = p.errorStream.bufferedReader().use { it.readText() }
-        val code = p.waitFor()
+        var stdout = ""
+        var stderr = ""
+        val outThread = Thread {
+            stdout = try { p.inputStream.bufferedReader().use { it.readText() } } catch (_: Exception) { "" }
+        }
+        val errThread = Thread {
+            stderr = try { p.errorStream.bufferedReader().use { it.readText() } } catch (_: Exception) { "" }
+        }
+        outThread.start()
+        errThread.start()
+
+        val finished = try {
+            p.waitFor(20, TimeUnit.SECONDS)
+        } catch (_: Exception) { false }
+
+        if (!finished) {
+            try { p.destroyForcibly() } catch (_: Exception) {}
+            stderr += "\n[ТАЙМАУТ: процесс принудительно остановлен через 20 сек]"
+        }
+        try { outThread.join(500) } catch (_: Exception) {}
+        try { errThread.join(500) } catch (_: Exception) {}
+
         return JSONObject().apply {
             put("command", cmd)
-            put("exit_code", code)
+            put("exit_code", if (finished) p.exitValue() else -1)
             put("stdout", stdout)
             put("stderr", stderr)
             put("duration_ms", System.currentTimeMillis() - t0)

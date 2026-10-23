@@ -151,7 +151,9 @@ class HttpServer(
                 }
 
                 uriPath == "/api/logs/clear" -> {
-                    ServerService.logRing.clear()
+                    synchronized(ServerService.logRing) {
+                        ServerService.logRing.clear()
+                    }
                     ServerService.addLog("Logs cleared by user", "SYSTEM")
                     sendJsonResponse(output, 200, JSONObject().put("status", "ok"))
                 }
@@ -349,12 +351,30 @@ class HttpServer(
         val start = System.currentTimeMillis()
         try {
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
-            val stdout = process.inputStream.bufferedReader().use { it.readText() }
-            val stderr = process.errorStream.bufferedReader().use { it.readText() }
-            val exitCode = process.waitFor()
+            var stdout = ""
+            var stderr = ""
+            val outThread = Thread {
+                stdout = try { process.inputStream.bufferedReader().use { it.readText() } } catch (_: Exception) { "" }
+            }
+            val errThread = Thread {
+                stderr = try { process.errorStream.bufferedReader().use { it.readText() } } catch (_: Exception) { "" }
+            }
+            outThread.start()
+            errThread.start()
+
+            val finished = try {
+                process.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)
+            } catch (_: Exception) { false }
+
+            if (!finished) {
+                try { process.destroyForcibly() } catch (_: Exception) {}
+                stderr += "\n[ТАЙМАУТ: процесс принудительно остановлен через 20 сек]"
+            }
+            try { outThread.join(500) } catch (_: Exception) {}
+            try { errThread.join(500) } catch (_: Exception) {}
 
             result.put("command", command)
-            result.put("exit_code", exitCode)
+            result.put("exit_code", if (finished) process.exitValue() else -1)
             result.put("stdout", stdout)
             result.put("stderr", stderr)
             result.put("duration_ms", System.currentTimeMillis() - start)

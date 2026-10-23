@@ -132,16 +132,25 @@ if (navigator.userAgent.includes('Android') || window.androidAPI) {
   });
 }
 
+const getBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
+    return window.location.origin;
+  }
+  const host = (activeChannel === 'wifi' && wifiHost) ? wifiHost : USB_HOST;
+  return `http://${host}:${serverPort}`;
+};
+
 // Универсальная обертка API (автоматически использует USB / Wi-Fi / Cloud Relay)
 async function apiCall(path, method = 'GET', body = null) {
   if (activeChannel === 'cloud') {
     return await sendCloudRpc(path, method, body);
   }
   const url = `${getBaseUrl()}${path}`;
+  const hasBody = body && method !== 'GET' && method !== 'HEAD';
   const options = {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
-    body: body ? JSON.stringify(body) : undefined,
+    headers: hasBody ? { 'Content-Type': 'application/json' } : {},
+    body: hasBody ? JSON.stringify(body) : undefined,
     cache: 'no-store'
   };
   const res = await fetch(url, options);
@@ -500,7 +509,7 @@ async function loadFiles(path) {
   fileTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Загрузка...</td></tr>';
 
   try {
-    const data = await apiCall(`/api/files?path=${encodeURIComponent(path)}`, 'GET', { path });
+    const data = await apiCall(`/api/files?path=${encodeURIComponent(path)}`, 'GET');
 
     if (data.error) {
       fileTableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--pixel-red);">${data.error}</td></tr>`;
@@ -1137,7 +1146,7 @@ async function openAppLogsModal(appName) {
   modalAppLogs.classList.remove('hidden');
 
   try {
-    const data = await apiCall(`/api/apps/logs?name=${encodeURIComponent(appName)}`, 'GET', { name: appName });
+    const data = await apiCall(`/api/apps/logs?name=${encodeURIComponent(appName)}`, 'GET');
     modalAppLogBody.textContent = (data && data.logs) ? data.logs : 'Логи пусты';
     modalAppLogBody.scrollTop = modalAppLogBody.scrollHeight;
   } catch (err) {

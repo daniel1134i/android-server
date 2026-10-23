@@ -98,12 +98,13 @@ object AppManager {
     }
 
     fun startApp(name: String, customCmd: String? = null): JSONObject {
-        val dir = File(appsDir, name)
+        val clean = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val dir = File(appsDir, clean)
         if (!dir.exists() || !dir.isDirectory) {
-            return JSONObject().put("error", "Приложение не найдено: $name")
+            return JSONObject().put("error", "Приложение не найдено: $clean")
         }
 
-        stopApp(name)
+        stopApp(clean)
 
         if (!customCmd.isNullOrBlank()) {
             File(dir, ".start_cmd").writeText(customCmd.trim())
@@ -117,12 +118,16 @@ object AppManager {
                 .directory(dir)
                 .redirectErrorStream(true)
 
-            // Запись вывода в файл лога
+            // Запись вывода в файл лога с ротацией при превышении 3 МБ
             val process = pb.start()
             val pid = extractPid(process)
 
             Thread {
                 try {
+                    if (logFile.exists() && logFile.length() > 3 * 1024 * 1024) {
+                        val tail = logFile.readLines().takeLast(500).joinToString("\n")
+                        logFile.writeText("[РОТАЦИЯ ЛОГОВ - ПРЕВЫШЕН ЛИМИТ 3МБ]\n$tail\n")
+                    }
                     val writer = FileWriter(logFile, true)
                     process.inputStream.bufferedReader().use { reader ->
                         var line: String?
@@ -135,26 +140,27 @@ object AppManager {
                 } catch (_: Exception) {}
             }.start()
 
-            activeApps[name] = RunningApp(name, process, pid, cmd, System.currentTimeMillis())
-            ServerService.addLog("Приложение '$name' успешно запущено (PID: $pid, Команда: $cmd)", "ПРИЛОЖЕНИЯ")
+            activeApps[clean] = RunningApp(clean, process, pid, cmd, System.currentTimeMillis())
+            ServerService.addLog("Приложение '$clean' успешно запущено (PID: $pid, Команда: $cmd)", "ПРИЛОЖЕНИЯ")
 
             JSONObject().apply {
                 put("status", "ok")
-                put("name", name)
+                put("name", clean)
                 put("pid", pid)
                 put("command", cmd)
             }
         } catch (e: Exception) {
-            ServerService.addLog("Ошибка запуска '$name': ${e.message}", "ОШИБКА")
+            ServerService.addLog("Ошибка запуска '$clean': ${e.message}", "ОШИБКА")
             JSONObject().put("error", "Не удалось запустить: ${e.message}")
         }
     }
 
     fun stopApp(name: String): Boolean {
-        val running = activeApps.remove(name) ?: return false
+        val clean = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val running = activeApps.remove(clean) ?: return false
         return try {
             running.process.destroyForcibly()
-            ServerService.addLog("Приложение '$name' остановлено", "ПРИЛОЖЕНИЯ")
+            ServerService.addLog("Приложение '$clean' остановлено", "ПРИЛОЖЕНИЯ")
             true
         } catch (_: Exception) {
             false
@@ -162,17 +168,19 @@ object AppManager {
     }
 
     fun deleteApp(name: String): Boolean {
-        stopApp(name)
-        val dir = File(appsDir, name)
+        val clean = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        stopApp(clean)
+        val dir = File(appsDir, clean)
         val ok = dir.deleteRecursively()
         if (ok) {
-            ServerService.addLog("Приложение '$name' удалено из /sdcard/ServerApps", "ПРИЛОЖЕНИЯ")
+            ServerService.addLog("Приложение '$clean' удалено из /sdcard/ServerApps", "ПРИЛОЖЕНИЯ")
         }
         return ok
     }
 
     fun getAppLogs(name: String): String {
-        val logFile = File(appsDir, "$name/app.log")
+        val clean = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val logFile = File(appsDir, "$clean/app.log")
         if (!logFile.exists()) return "Логи отсутствуют"
         return try {
             logFile.readLines().takeLast(200).joinToString("\n")
@@ -389,6 +397,11 @@ object AppManager {
 
                 if (cleanName.isNotEmpty()) {
                     val outFile = File(targetDir, cleanName)
+                    val canonicalDest = targetDir.canonicalPath
+                    val canonicalOut = outFile.canonicalPath
+                    if (!canonicalOut.startsWith(canonicalDest + File.separator) && canonicalOut != canonicalDest) {
+                        throw SecurityException("Обнаружена попытка Zip Slip выхода за пределы каталога: $name")
+                    }
                     if (entry.isDirectory) {
                         outFile.mkdirs()
                     } else {
