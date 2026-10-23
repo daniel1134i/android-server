@@ -24,6 +24,7 @@ class ServerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var httpServer: HttpServer? = null
     private var batteryMonitor: BatteryMonitor? = null
+    private var discoveryService: DiscoveryService? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -47,6 +48,10 @@ class ServerService : Service() {
         }
         httpServer?.start()
 
+        discoveryService = DiscoveryService(this, 8080, 8081) { logMsg ->
+            broadcastLog(logMsg)
+        }.apply { start() }
+
         isRunning = true
         broadcastLog("Server service started on port 8080")
     }
@@ -65,6 +70,7 @@ class ServerService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        discoveryService?.stop()
         httpServer?.stop()
         batteryMonitor?.stop()
 

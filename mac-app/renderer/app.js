@@ -46,6 +46,7 @@ const btnAdbTunnel = document.getElementById('btnAdbTunnel');
 const adbOutput = document.getElementById('adbOutput');
 const presetUsb = document.getElementById('presetUsb');
 const presetWifi = document.getElementById('presetWifi');
+const btnAutoScan = document.getElementById('btnAutoScan');
 
 // Navigation Tabs
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -313,6 +314,28 @@ function formatFileSize(bytes) {
 }
 
 // Connection Configuration
+btnAutoScan.addEventListener('click', async () => {
+  btnAutoScan.textContent = 'SCANNING...';
+  try {
+    const res = await window.electronAPI.discoverBonjour();
+    if (res.success && res.ip) {
+      inputHost.value = res.ip;
+      inputPort.value = res.port || 8080;
+      serverHost = res.ip;
+      serverPort = res.port || 8080;
+      btnAutoScan.textContent = `FOUND: ${res.ip}`;
+      setTimeout(() => { btnAutoScan.textContent = '🔍 AUTO-DISCOVER (MDNS)'; }, 3000);
+      fetchTelemetry();
+    } else {
+      btnAutoScan.textContent = 'NOT FOUND (USE USB)';
+      setTimeout(() => { btnAutoScan.textContent = '🔍 AUTO-DISCOVER (MDNS)'; }, 2500);
+    }
+  } catch (err) {
+    btnAutoScan.textContent = 'ERROR SCANNING';
+    setTimeout(() => { btnAutoScan.textContent = '🔍 AUTO-DISCOVER (MDNS)'; }, 2500);
+  }
+});
+
 btnSaveConnect.addEventListener('click', () => {
   serverHost = inputHost.value.trim();
   serverPort = parseInt(inputPort.value, 10) || 8080;

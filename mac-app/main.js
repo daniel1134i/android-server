@@ -59,6 +59,28 @@ ipcMain.handle('adb:devices', async () => {
   });
 });
 
+ipcMain.handle('bonjour:discover', async () => {
+  return new Promise((resolve) => {
+    exec("dns-sd -L AndroidServerNode _androidserver._tcp local & PID=$!; sleep 1.5; kill $PID 2>/dev/null", (err, stdout) => {
+      const hostMatch = stdout.match(/can be reached at ([^:]+):(\d+)/);
+      if (hostMatch) {
+        const hostname = hostMatch[1].trim();
+        const port = parseInt(hostMatch[2], 10) || 8080;
+        exec(`dns-sd -G v4 ${hostname} & PID=$!; sleep 1.2; kill $PID 2>/dev/null`, (err2, stdout2) => {
+          const ipMatch = stdout2.match(/(\d+\.\d+\.\d+\.\d+)/);
+          if (ipMatch) {
+            resolve({ success: true, ip: ipMatch[1], hostname, port });
+          } else {
+            resolve({ success: true, ip: hostname.replace(/\.$/, ''), hostname, port });
+          }
+        });
+      } else {
+        resolve({ success: false, error: 'Tablet not detected via Bonjour' });
+      }
+    });
+  });
+});
+
 ipcMain.handle('open:external', async (event, url) => {
   shell.openExternal(url);
 });
