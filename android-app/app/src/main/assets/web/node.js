@@ -12,7 +12,6 @@ const txtDaemonSub = document.getElementById('txtDaemonSub');
 const valWifiUrl = document.getElementById('valWifiUrl');
 
 const btnDimScreen = document.getElementById('btnDimScreen');
-const btnResetNode = document.getElementById('btnResetNode');
 const btnToggleDaemon = document.getElementById('btnToggleDaemon');
 const btnClearLogs = document.getElementById('btnClearLogs');
 
@@ -613,33 +612,6 @@ if (btnDimScreen) {
         '<span class="btn-icon">💡</span> ВЕРНУТЬ ЯРКОСТЬ' : 
         '<span class="btn-icon">🌙</span> OLED ЭКО (ЭКОНОМИЯ 95%)';
       appendLogEntry(`Яркость экрана ${isDimmed ? 'приглушена до минимума' : 'восстановлена'}`, 'ПИТАНИЕ');
-    }
-  });
-}
-
-if (btnResetNode) {
-  btnResetNode.addEventListener('click', async () => {
-    if (!confirm('Выполнить полный сброс ноды с нуля? Все сессии, логи и облачные учетные данные будут сброшены к заводским настройкам.')) {
-      return;
-    }
-    btnResetNode.disabled = true;
-    try {
-      appendLogEntry('Запущен процесс сброса к заводским настройкам...', 'СИСТЕМА');
-      const res = await fetch('/api/reset');
-      const data = await res.json();
-      if (data.status === 'reset_ok' || data.status === 'reset_complete') {
-        appendLogEntry(`Сброс завершен успешно! Новый Node ID: ${data.node_id}`, 'СИСТЕМА');
-        if (logStreamBox) logStreamBox.innerHTML = '';
-        lastLogCount = 0;
-        await pollStatus();
-        alert(`Сервер полностью сброшен к заводским настройкам!\nНовый Node ID: ${data.node_id}`);
-      } else {
-        appendLogEntry('Сброс завершен с предупреждением', 'ВНИМАНИЕ');
-      }
-    } catch (err) {
-      appendLogEntry(`Ошибка сброса: ${err.message}`, 'ОШИБКА');
-    } finally {
-      btnResetNode.disabled = false;
     }
   });
 }
