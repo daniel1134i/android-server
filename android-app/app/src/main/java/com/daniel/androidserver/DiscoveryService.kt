@@ -19,11 +19,20 @@ class DiscoveryService(
     private var nsdManager: NsdManager? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
     private var udpSocket: DatagramSocket? = null
+    private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
     private val isRunning = AtomicBoolean(false)
 
     fun start() {
         if (isRunning.get()) return
         isRunning.set(true)
+
+        try {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+            multicastLock = wifiManager.createMulticastLock("AndroidServer:DiscoveryMulticast").apply {
+                setReferenceCounted(true)
+                acquire()
+            }
+        } catch (_: Exception) {}
 
         startNsd()
         startUdpResponder()
@@ -34,6 +43,9 @@ class DiscoveryService(
         stopNsd()
         try {
             udpSocket?.close()
+        } catch (_: Exception) {}
+        try {
+            if (multicastLock?.isHeld == true) multicastLock?.release()
         } catch (_: Exception) {}
     }
 

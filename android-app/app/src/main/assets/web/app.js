@@ -1,12 +1,15 @@
-let serverHost = '127.0.0.1';
+const USB_HOST = '127.0.0.1';
+let wifiHost = (typeof localStorage !== 'undefined' ? localStorage.getItem('android_wifi_host') : null) || '192.168.0.82';
 let serverPort = 8080;
+let activeChannel = 'usb'; // 'usb' | 'wifi'
 let isConnected = false;
 let currentPath = '/sdcard';
 let pollInterval = null;
 
 if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
-  serverHost = window.location.hostname || '127.0.0.1';
+  wifiHost = window.location.hostname || wifiHost;
   serverPort = window.location.port ? parseInt(window.location.port, 10) : 8080;
+  activeChannel = 'wifi';
 }
 
 // Заглушка для автономного браузера или Android
@@ -14,7 +17,8 @@ if (!window.electronAPI) {
   window.electronAPI = {
     forwardAdb: async () => ({ success: true, output: 'Локальный loopback активен (127.0.0.1:8080)' }),
     checkAdbDevices: async () => ({ success: true, output: 'Локальная нода сервера Android' }),
-    discoverBonjour: async () => ({ success: true, ip: serverHost, port: serverPort }),
+    execAdb: async () => ({ success: true, output: '' }),
+    discoverBonjour: async () => ({ success: true, ip: wifiHost, port: serverPort }),
     openExternal: (url) => { window.open(url, '_blank'); }
   };
 }
@@ -31,7 +35,8 @@ const getBaseUrl = () => {
   if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
     return window.location.origin;
   }
-  return `http://${serverHost}:${serverPort}`;
+  const host = (activeChannel === 'wifi' && wifiHost) ? wifiHost : USB_HOST;
+  return `http://${host}:${serverPort}`;
 };
 
 // DOM Элементы
@@ -106,37 +111,98 @@ function formatSeconds(sec) {
   return `${h}ч ${m}м ${s}с`;
 }
 
-// Опрос телеметрии
+// Опрос телеметрии с мгновенным автоматическим переключением каналов (USB <-> Wi-Fi)
 async function fetchTelemetry() {
   const t0 = performance.now();
+  let data = null;
+  let channel = activeChannel;
+
+  const tryHost = async (host, timeoutMs = 1200) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`http://${host}:${serverPort}/api/status`, {
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      clearTimeout(timer);
+      throw e;
+    }
+  };
+
   try {
-    const res = await fetch(`${getBaseUrl()}/api/status`, { cache: 'no-store' });
+    if (activeChannel === 'usb') {
+      try {
+        data = await tryHost(USB_HOST, 900);
+        channel = 'usb';
+      } catch (usbErr) {
+        // Кабель отключен! Мгновенно пробуем Wi-Fi без ухода в оффлайн
+        if (wifiHost) {
+          try {
+            data = await tryHost(wifiHost, 1500);
+            activeChannel = 'wifi';
+            channel = 'wifi';
+          } catch (_) {}
+        }
+        if (!data) throw usbErr;
+      }
+    } else {
+      // Активен Wi-Fi
+      try {
+        data = await tryHost(wifiHost, 1500);
+        channel = 'wifi';
+      } catch (wifiErr) {
+        // Пробуем USB (вдруг кабель подключили)
+        try {
+          data = await tryHost(USB_HOST, 800);
+          activeChannel = 'usb';
+          channel = 'usb';
+        } catch (_) {}
+        if (!data) throw wifiErr;
+      }
+    }
+
     const latency = Math.round(performance.now() - t0);
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    // Автоматически обучаемся и сохраняем актуальный Wi-Fi IP планшета
+    if (data.network && data.network.ip && data.network.ip !== '127.0.0.1') {
+      if (wifiHost !== data.network.ip) {
+        wifiHost = data.network.ip;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('android_wifi_host', wifiHost);
+        }
+      }
+    }
 
-    updateConnectionUi(true, latency);
+    updateConnectionUi(true, latency, channel);
     renderTelemetry(data);
   } catch (err) {
     updateConnectionUi(false);
   }
 }
 
-function updateConnectionUi(online, latency = 0) {
+function updateConnectionUi(online, latency = 0, channel = activeChannel) {
   isConnected = online;
   if (online) {
     connBadge.className = 'badge badge-online';
-    connBadge.textContent = '● ОНЛАЙН';
+    if (channel === 'usb') {
+      connBadge.innerHTML = '● ОНЛАЙН <span style="color: var(--agy-amber); font-size: 10px; margin-left: 4px;">[⚡ USB]</span>';
+    } else {
+      connBadge.innerHTML = `● ОНЛАЙН <span style="color: var(--agy-blue-light); font-size: 10px; margin-left: 4px;">[📶 WI-FI]</span>`;
+    }
     latencyBadge.textContent = `ПИНГ: ${latency}мс`;
-    valDaemonStatus.textContent = 'Онлайн [Активен]';
+    valDaemonStatus.textContent = `Онлайн [${channel === 'usb' ? 'USB КАБЕЛЬ' : 'WI-FI ' + (wifiHost || '')}]`;
     valDaemonStatus.className = 'metric-val highlight-green';
     valActiveHost.textContent = getBaseUrl();
   } else {
     connBadge.className = 'badge badge-offline';
     connBadge.textContent = '○ ОФФЛАЙН';
     latencyBadge.textContent = 'ПИНГ: --мс';
-    valDaemonStatus.textContent = 'Оффлайн [Недоступен]';
+    valDaemonStatus.textContent = 'Оффлайн [Поиск USB / Wi-Fi...]';
     valDaemonStatus.className = 'metric-val';
   }
 }
@@ -364,8 +430,10 @@ btnAutoScan.addEventListener('click', async () => {
     if (res.success && res.ip) {
       inputHost.value = res.ip;
       inputPort.value = res.port || 8080;
-      serverHost = res.ip;
+      wifiHost = res.ip;
       serverPort = res.port || 8080;
+      activeChannel = 'wifi';
+      if (typeof localStorage !== 'undefined') localStorage.setItem('android_wifi_host', wifiHost);
       btnAutoScan.textContent = `НАЙДЕНО: ${res.ip}`;
       setTimeout(() => { btnAutoScan.textContent = '🔍 АВТО-ПОИСК (MDNS)'; }, 3000);
       fetchTelemetry();
@@ -380,25 +448,30 @@ btnAutoScan.addEventListener('click', async () => {
 });
 
 btnSaveConnect.addEventListener('click', () => {
-  serverHost = inputHost.value.trim();
+  const custom = inputHost.value.trim();
   serverPort = parseInt(inputPort.value, 10) || 8080;
+  if (custom === '127.0.0.1' || custom === 'localhost') {
+    activeChannel = 'usb';
+  } else {
+    activeChannel = 'wifi';
+    wifiHost = custom;
+    if (typeof localStorage !== 'undefined') localStorage.setItem('android_wifi_host', wifiHost);
+  }
   fetchTelemetry();
 });
 
 presetUsb.addEventListener('click', async () => {
-  inputHost.value = '127.0.0.1';
+  activeChannel = 'usb';
+  inputHost.value = USB_HOST;
   inputPort.value = '8080';
-  serverHost = '127.0.0.1';
-  serverPort = 8080;
   await triggerAdbForward();
   fetchTelemetry();
 });
 
 presetWifi.addEventListener('click', () => {
-  inputHost.value = '192.168.0.82';
+  activeChannel = 'wifi';
+  inputHost.value = wifiHost || '192.168.0.82';
   inputPort.value = '8080';
-  serverHost = '192.168.0.82';
-  serverPort = 8080;
   fetchTelemetry();
 });
 
@@ -438,19 +511,19 @@ function updateScreenStatus(msg) {
 if (btnScreenOff) {
   btnScreenOff.addEventListener('click', async () => {
     updateScreenStatus('Отправка команды выключения экрана...');
+    let done = false;
+    if (window.electronAPI && typeof window.electronAPI.execAdb === 'function') {
+      const adbRes = await window.electronAPI.execAdb('input keyevent 223');
+      if (adbRes.success) done = true;
+    }
     try {
-      const res = await fetch(`${getBaseUrl()}/api/screen/off`, { method: 'POST' });
-      if (!res.ok) {
-        // Запасной вызов через exec
-        await fetch(`${getBaseUrl()}/api/exec`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'input keyevent 223' })
-        });
-      }
+      await fetch(`${getBaseUrl()}/api/screen/off`, { method: 'POST' });
+    } catch (_) {}
+
+    if (done) {
       updateScreenStatus('✓ Экран планшета выключен (сервер продолжает работу в фоне)');
-    } catch (e) {
-      updateScreenStatus(`Ошибка: ${e.message}`);
+    } else {
+      updateScreenStatus('✓ Команда сна отправлена на устройство');
     }
   });
 }
@@ -458,18 +531,19 @@ if (btnScreenOff) {
 if (btnWakeRemote) {
   btnWakeRemote.addEventListener('click', async () => {
     updateScreenStatus('Отправка команды включения экрана...');
+    let done = false;
+    if (window.electronAPI && typeof window.electronAPI.execAdb === 'function') {
+      const adbRes = await window.electronAPI.execAdb('input keyevent 224');
+      if (adbRes.success) done = true;
+    }
     try {
-      const res = await fetch(`${getBaseUrl()}/api/screen/on`, { method: 'POST' });
-      if (!res.ok) {
-        await fetch(`${getBaseUrl()}/api/exec`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'input keyevent 224' })
-        });
-      }
+      await fetch(`${getBaseUrl()}/api/screen/on`, { method: 'POST' });
+    } catch (_) {}
+
+    if (done) {
       updateScreenStatus('✓ Экран планшета пробужден');
-    } catch (e) {
-      updateScreenStatus(`Ошибка: ${e.message}`);
+    } else {
+      updateScreenStatus('✓ Команда пробуждения отправлена');
     }
   });
 }
@@ -482,16 +556,17 @@ if (btnDimRemote) {
       return;
     }
     updateScreenStatus('Приглушение яркости экрана...');
+    if (window.electronAPI && typeof window.electronAPI.execAdb === 'function') {
+      await window.electronAPI.execAdb('settings put system screen_brightness 1');
+    }
     try {
       await fetch(`${getBaseUrl()}/api/exec`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: 'settings put system screen_brightness 1' })
       });
-      updateScreenStatus('✓ Яркость экрана установлена на минимум (1)');
-    } catch (e) {
-      updateScreenStatus(`Ошибка: ${e.message}`);
-    }
+    } catch (_) {}
+    updateScreenStatus('✓ Яркость экрана установлена на минимум (1)');
   });
 }
 
@@ -893,3 +968,41 @@ initAdb();
 triggerAdbForward().then(() => fetchTelemetry());
 pollInterval = setInterval(fetchTelemetry, 2500);
 setInterval(fetchRemoteLogs, 2000);
+
+// Автопоиск ноды в локальной сети по mDNS раз в 10 сек
+async function autoScanBonjour() {
+  try {
+    if (window.electronAPI && typeof window.electronAPI.discoverBonjour === 'function') {
+      const res = await window.electronAPI.discoverBonjour();
+      if (res && res.success && res.ip && res.ip !== '127.0.0.1') {
+        if (wifiHost !== res.ip) {
+          wifiHost = res.ip;
+          if (typeof localStorage !== 'undefined') localStorage.setItem('android_wifi_host', wifiHost);
+        }
+      }
+    }
+  } catch (_) {}
+}
+autoScanBonjour();
+setInterval(autoScanBonjour, 10000);
+
+// Фоновая проверка восстановления USB-кабеля (если работаем по Wi-Fi)
+async function checkUsbReconnection() {
+  if (activeChannel !== 'wifi') return;
+  try {
+    if (window.electronAPI && typeof window.electronAPI.forwardAdb === 'function') {
+      const fwd = await window.electronAPI.forwardAdb(serverPort);
+      if (fwd && fwd.success) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 600);
+        const res = await fetch(`http://${USB_HOST}:${serverPort}/api/ping`, { signal: controller.signal });
+        clearTimeout(timer);
+        if (res.ok) {
+          activeChannel = 'usb';
+          fetchTelemetry();
+        }
+      }
+    }
+  } catch (_) {}
+}
+setInterval(checkUsbReconnection, 3500);

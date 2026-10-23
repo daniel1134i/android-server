@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.net.wifi.WifiManager
 import androidx.core.app.NotificationCompat
 
 class ServerService : Service() {
@@ -36,6 +37,7 @@ class ServerService : Service() {
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
     private var httpServer: HttpServer? = null
     private var batteryMonitor: BatteryMonitor? = null
     private var discoveryService: DiscoveryService? = null
@@ -44,11 +46,27 @@ class ServerService : Service() {
         super.onCreate()
         createNotificationChannel()
 
-        // Acquire partial wakelock to ensure CPU keeps running when screen sleeps
+        // CPU WakeLock
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AndroidServer:ServiceWakeLock").apply {
             setReferenceCounted(false)
             acquire()
+        }
+
+        // Wi-Fi High Performance Lock (prevents Wi-Fi chip sleep when unplugged from USB/charger)
+        try {
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val wifiMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            } else {
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            }
+            wifiLock = wifiManager.createWifiLock(wifiMode, "AndroidServer:WifiLock").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        } catch (e: Exception) {
+            addLog("Не удалось захватить WifiLock: ${e.message}", "ПРЕДУПРЕЖДЕНИЕ")
         }
 
         batteryMonitor = BatteryMonitor(this).apply { start() }
@@ -93,6 +111,12 @@ class ServerService : Service() {
         try {
             if (wakeLock?.isHeld == true) {
                 wakeLock?.release()
+            }
+        } catch (_: Exception) {}
+
+        try {
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
             }
         } catch (_: Exception) {}
 
