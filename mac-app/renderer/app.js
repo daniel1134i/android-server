@@ -853,6 +853,111 @@ if (btnConnectCloud) {
   });
 }
 
+// ========================================================
+// ⚠️ СБРОС ВСЕХ НАСТРОЕК И СОЕДИНЕНИЯ К ЗАВОДСКИМ (С НУЛЯ)
+// ========================================================
+const btnFactoryReset = document.getElementById('btnFactoryReset');
+const txtFactoryResetStatus = document.getElementById('txtFactoryResetStatus');
+
+if (btnFactoryReset) {
+  btnFactoryReset.addEventListener('click', async () => {
+    const ok = confirm(
+      "⚠️ ВНИМАНИЕ: СБРОС К ЗАВОДСКИМ НАСТРОЙКАМ\n\n" +
+      "Это действие полностью сбросит соединение с сервером:\n" +
+      "• Будут удалены все сохраненные IP-адреса Wi-Fi\n" +
+      "• Будут удалены облачный ID ноды и секретные ключи\n" +
+      "• Будет очищен кэш приложения и сессий\n\n" +
+      "Приложение вернется к состоянию чистого первого запуска.\n\n" +
+      "Сбросить все настройки?"
+    );
+    if (!ok) return;
+
+    btnFactoryReset.disabled = true;
+    btnFactoryReset.textContent = '⏳ СБРОС НАСТРОЕК...';
+    if (txtFactoryResetStatus) {
+      txtFactoryResetStatus.textContent = 'Очистка кэша и учетных данных...';
+      txtFactoryResetStatus.style.color = 'var(--agy-amber)';
+    }
+
+    try {
+      // 1. Закрываем облачный вебсокет
+      if (cloudWs) {
+        try { cloudWs.close(); } catch (_) {}
+        cloudWs = null;
+        cloudIsReady = false;
+      }
+
+      // 2. Очищаем LocalStorage браузера / Electron
+      if (typeof localStorage !== 'undefined') {
+        localStorage.clear();
+      }
+
+      // 3. Вызываем Electron API для глубокой очистки сессии на диске
+      if (window.electronAPI && typeof window.electronAPI.factoryReset === 'function') {
+        await window.electronAPI.factoryReset();
+      }
+
+      // 4. Сбрасываем переменные в памяти
+      wifiHost = '';
+      cloudNodeId = '';
+      cloudSecretKey = '';
+      cloudRelayUrl = 'ws://192.168.0.199:8088';
+      serverPort = 8080;
+      activeChannel = 'usb';
+      isConnected = false;
+
+      // 5. Очищаем поля ввода
+      if (inputHost) inputHost.value = '127.0.0.1';
+      if (inputPort) inputPort.value = '8080';
+      if (inputCloudNodeId) inputCloudNodeId.value = '';
+      if (inputCloudSecretKey) inputCloudSecretKey.value = '';
+      if (inputCloudRelayUrl) inputCloudRelayUrl.value = 'ws://192.168.0.199:8088';
+
+      // 6. Сбрасываем бейджи и баннеры
+      if (badgePairStatus) {
+        badgePairStatus.className = 'badge badge-dim';
+        badgePairStatus.textContent = 'ГОТОВО К ПОИСКУ';
+      }
+      if (txtAutoPairStatus) txtAutoPairStatus.textContent = '';
+      if (pairSuccessBanner) {
+        pairSuccessBanner.classList.add('hidden');
+        pairSuccessBanner.innerHTML = '';
+      }
+      if (badgeCloudStatus) {
+        badgeCloudStatus.className = 'badge badge-dim';
+        badgeCloudStatus.textContent = '☁ НЕ НАСТРОЕНО';
+      }
+      if (txtCloudConnectStatus) txtCloudConnectStatus.textContent = '';
+      if (connBadge) {
+        connBadge.className = 'badge badge-offline';
+        connBadge.textContent = '○ СБРОШЕНО';
+      }
+      if (latencyBadge) latencyBadge.textContent = 'ПИНГ: --мс';
+      if (valActiveHost) valActiveHost.textContent = 'http://127.0.0.1:8080';
+      if (valDaemonStatus) {
+        valDaemonStatus.className = 'metric-val';
+        valDaemonStatus.textContent = 'Сброшено';
+      }
+
+      if (txtFactoryResetStatus) {
+        txtFactoryResetStatus.textContent = '✓ Все настройки сброшены к заводским! Приложение готово к новому первому запуску.';
+        txtFactoryResetStatus.style.color = 'var(--agy-green)';
+        setTimeout(() => {
+          if (txtFactoryResetStatus) txtFactoryResetStatus.textContent = '';
+        }, 5000);
+      }
+    } catch (err) {
+      if (txtFactoryResetStatus) {
+        txtFactoryResetStatus.textContent = `Ошибка сброса: ${err.message}`;
+        txtFactoryResetStatus.style.color = 'var(--agy-coral)';
+      }
+    } finally {
+      btnFactoryReset.disabled = false;
+      btnFactoryReset.textContent = '🗑 СБРОСИТЬ ВСЕ НАСТРОЙКИ С НУЛЯ';
+    }
+  });
+}
+
 const btnScreenOff = document.getElementById('btnScreenOff');
 const btnWakeRemote = document.getElementById('btnWakeRemote');
 const btnDimRemote = document.getElementById('btnDimRemote');

@@ -284,6 +284,19 @@ ipcMain.handle('pairing:auto-pair', async () => {
   };
 });
 
+ipcMain.handle('pairing:factory-reset', async () => {
+  try {
+    const ses = mainWindow ? mainWindow.webContents.session : null;
+    if (ses) {
+      await ses.clearStorageData();
+      await ses.clearCache();
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('open:external', async (event, url) => {
   shell.openExternal(url);
 });

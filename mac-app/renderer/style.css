@@ -983,3 +983,33 @@ body {
   line-height: 1.6;
 }
 
+.danger-reset-card {
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--agy-coral);
+  background: linear-gradient(180deg, rgba(223, 99, 71, 0.08) 0%, var(--bg-surface) 100%);
+}
+
+.btn-pixel-danger {
+  background: rgba(223, 99, 71, 0.2);
+  border: 1px solid var(--agy-coral);
+  color: #df6347;
+  padding: 8px 16px;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.btn-pixel-danger:hover {
+  background: var(--agy-coral);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(223, 99, 71, 0.5);
+}
+
+.btn-pixel-danger:active {
+  transform: translateY(1px);
+}
+
+

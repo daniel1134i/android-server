@@ -464,6 +464,24 @@
             <span id="txtCloudConnectStatus" style="font-size: 11px; color: var(--text-muted);"></span>
           </div>
         </div>
+
+        <!-- КАРТОЧКА СБРОСА К ЗАВОДСКИМ НАСТРОЙКАМ (С НУЛЯ) -->
+        <div class="pixel-card max-w-600 danger-reset-card" style="margin-top: 18px;">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: var(--agy-coral);">⚠️ СБРОС СОЕДИНЕНИЯ И ПАРАМЕТРОВ (К ЗАВОДСКИМ)</span>
+            <span class="badge" style="background: rgba(223, 99, 71, 0.2); border-color: var(--agy-coral); color: #df6347;">С НУЛЯ</span>
+          </div>
+          <p class="eco-p" style="margin-bottom: 12px; font-size: 11px;">
+            Полное обнуление всех настроек контроллера: удаляются сохраненные IP-адреса Wi-Fi, облачные Node ID, секретные ключи авторизации и кэш сессий. Приложение вернется к чистому состоянию первого запуска.
+          </p>
+
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <button id="btnFactoryReset" class="btn-pixel-danger">
+              🗑 СБРОСИТЬ ВСЕ НАСТРОЙКИ С НУЛЯ
+            </button>
+            <span id="txtFactoryResetStatus" style="font-size: 11px; color: var(--text-muted);"></span>
+          </div>
+        </div>
       </section>
 
     </main>
