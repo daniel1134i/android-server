@@ -16,53 +16,39 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@color/bg_surface"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:padding="16dp"
-            android:gravity="center_vertical"
             android:layout_marginBottom="16dp">
 
-            <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/antigravity_logo"
-                android:layout_marginEnd="16dp" />
-
-            <LinearLayout
-                android:layout_width="0dp"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
+                android:fontFamily="monospace"
+                android:text="[ NODE DAEMON :: AUTO NODE ]"
+                android:textColor="@color/accent_antigravity_amber"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:text="[ NODE DAEMON :: ANTIGRAVITY ]"
-                    android:textColor="@color/accent_antigravity_amber"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+            <TextView
+                android:id="@+id/tvDeviceTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:text="ANDROID AUTONOMOUS SERVER"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:layout_marginTop="4dp" />
 
-                <TextView
-                    android:id="@+id/tvDeviceTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:text="ANTIGRAVITY AUTONOMOUS NODE"
-                    android:textColor="@color/text_primary"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:layout_marginTop="2dp" />
-
-                <TextView
-                    android:id="@+id/tvServerStatusBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:text="● RUNNING [ONLINE]"
-                    android:textColor="@color/status_green"
-                    android:textSize="14sp"
-                    android:layout_marginTop="4dp" />
-            </LinearLayout>
+            <TextView
+                android:id="@+id/tvServerStatusBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:text="● RUNNING [ONLINE]"
+                android:textColor="@color/status_green"
+                android:textSize="14sp"
+                android:layout_marginTop="6dp" />
         </LinearLayout>
 
         <!-- Network & Endpoint Card -->
