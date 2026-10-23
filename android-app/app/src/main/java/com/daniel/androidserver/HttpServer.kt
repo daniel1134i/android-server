@@ -105,7 +105,19 @@ class HttpServer(
             val uriPath = if (fullPath.contains('?')) fullPath.substring(0, fullPath.indexOf('?')) else fullPath
             val queryParams = parseQueryParams(fullPath)
 
-            logCallback("$method $uriPath")
+            // Фильтруем технический шум фонового поллинга (телеметрия, логи, список приложений, статика)
+            val isRoutinePolling = uriPath == "/api/status" ||
+                                  uriPath == "/api/logs" ||
+                                  uriPath == "/api/apps" ||
+                                  uriPath == "/api/ping" ||
+                                  uriPath == "/favicon.ico" ||
+                                  uriPath.endsWith(".css") ||
+                                  uriPath.endsWith(".js") ||
+                                  uriPath.endsWith(".html")
+
+            if (!isRoutinePolling) {
+                logCallback("$method $uriPath")
+            }
 
             when {
                 uriPath == "/api/ping" -> {
