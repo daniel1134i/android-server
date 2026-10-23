@@ -274,7 +274,9 @@
           <!-- Поле Git URL -->
           <div id="groupGitDeploy" class="deploy-form-group">
             <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Ссылка на Git-репозиторий (GitHub / GitLab):</label>
-            <input type="text" id="inputGitUrl" class="pixel-input" placeholder="https://github.com/user/microservice-repo" style="width: 100%; margin-bottom: 10px;" />
+            <input type="text" id="inputGitUrl" class="pixel-input" placeholder="https://github.com/user/microservice-repo" style="width: 100%; margin-bottom: 8px;" />
+            <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Токен доступа (для закрытых репозиториев, опционально):</label>
+            <input type="password" id="inputGitToken" class="pixel-input" placeholder="ghp_xxxx или glpat-xxxx (или укажите токен прямо в URL)" style="width: 100%; margin-bottom: 10px;" />
           </div>
 
           <!-- Поле ZIP Upload -->

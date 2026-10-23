@@ -201,39 +201,118 @@ object AppManager {
         }
     }
 
-    fun deployGit(gitUrl: String, customName: String? = null, customCmd: String? = null): JSONObject {
+    fun deployGit(gitUrl: String, customName: String? = null, customCmd: String? = null, token: String? = null): JSONObject {
         val cleanUrl = gitUrl.trim()
-        val derivedName = customName?.ifBlank { null }
-            ?: cleanUrl.removeSuffix("/").removeSuffix(".git").substringAfterLast("/")
+
+        // Извлечение токена из URL (например, https://TOKEN@github.com/... или https://user:TOKEN@github.com/...)
+        var extractedToken: String? = token?.trim()?.ifBlank { null }
+        var normalizedUrl = cleanUrl
+
+        try {
+            val uri = java.net.URI(cleanUrl)
+            val userInfo = uri.userInfo
+            if (!userInfo.isNullOrBlank()) {
+                if (extractedToken == null) {
+                    extractedToken = if (userInfo.contains(":")) userInfo.substringAfter(":") else userInfo
+                }
+                normalizedUrl = "${uri.scheme}://${uri.host}${if (uri.port > 0) ":${uri.port}" else ""}${uri.path}"
+            }
+        } catch (_: Exception) {}
+
+        val pathParts = normalizedUrl.removeSuffix("/").removeSuffix(".git").split("/")
+        val repoSlug = pathParts.lastOrNull()?.ifBlank { null } ?: "git_app"
+        val derivedName = customName?.ifBlank { null } ?: repoSlug
         val cleanName = derivedName.replace(Regex("[^a-zA-Z0-9._-]"), "_").ifEmpty { "git_app" }
 
-        val downloadUrl = resolveArchiveUrl(cleanUrl)
-        ServerService.addLog("Загрузка репозитория с: $downloadUrl", "ДЕПЛОЙ")
-
         return try {
-            val url = URL(downloadUrl)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.instanceFollowRedirects = true
-            conn.connectTimeout = 15000
-            conn.readTimeout = 30000
-            conn.setRequestProperty("User-Agent", "AndroidServerNode/1.0")
+            val zipBytes: ByteArray
+            if (normalizedUrl.contains("github.com") && !extractedToken.isNullOrBlank()) {
+                // Для закрытых репозиториев GitHub используем API /repos/{owner}/{repo}/zipball с Bearer-токеном
+                val owner = pathParts.getOrNull(pathParts.size - 2) ?: ""
+                val repo = pathParts.lastOrNull() ?: ""
+                val apiUrl = "https://api.github.com/repos/$owner/$repo/zipball"
+                ServerService.addLog("Загрузка закрытого GitHub репозитория $owner/$repo через API с токеном", "ДЕПЛОЙ")
 
-            var responseCode = conn.responseCode
-            var redirectConn = conn
-            if (responseCode == HttpURLConnection.HTTP_MOVED_TEMP || responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == 307 || responseCode == 308) {
-                val newUrl = conn.getHeaderField("Location")
-                redirectConn = URL(newUrl).openConnection() as HttpURLConnection
-                redirectConn.connectTimeout = 15000
-                redirectConn.readTimeout = 30000
-                redirectConn.setRequestProperty("User-Agent", "AndroidServerNode/1.0")
-                responseCode = redirectConn.responseCode
+                val conn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = false
+                    connectTimeout = 20000
+                    readTimeout = 40000
+                    setRequestProperty("Authorization", "Bearer $extractedToken")
+                    setRequestProperty("Accept", "application/vnd.github+json")
+                    setRequestProperty("User-Agent", "AndroidServerNode/1.0")
+                }
+
+                val code = conn.responseCode
+                if (code == 301 || code == 302 || code == 307 || code == 308) {
+                    val location = conn.getHeaderField("Location") ?: throw IOException("Отсутствует заголовок Location для редиректа")
+                    val redirectConn = (URL(location).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 25000
+                        readTimeout = 60000
+                        setRequestProperty("User-Agent", "AndroidServerNode/1.0")
+                    }
+                    if (redirectConn.responseCode !in 200..299) {
+                        throw IOException("Ошибка скачивания архива по редиректу: HTTP ${redirectConn.responseCode}")
+                    }
+                    zipBytes = redirectConn.inputStream.use { it.readBytes() }
+                } else if (code in 200..299) {
+                    zipBytes = conn.inputStream.use { it.readBytes() }
+                } else if (code == 401 || code == 404 || code == 403) {
+                    return JSONObject().put(
+                        "error",
+                        "Доступ запрещен (HTTP $code). Проверьте токен доступа (Personal Access Token) или права на репозиторий $owner/$repo"
+                    )
+                } else {
+                    return JSONObject().put("error", "GitHub API вернул HTTP $code для $apiUrl")
+                }
+            } else {
+                // Публичный репозиторий или прямая ссылка на архив
+                val downloadUrl = resolveArchiveUrl(normalizedUrl)
+                ServerService.addLog("Загрузка архива репозитория: $downloadUrl", "ДЕПЛОЙ")
+
+                var conn = (URL(downloadUrl).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = true
+                    connectTimeout = 20000
+                    readTimeout = 40000
+                    setRequestProperty("User-Agent", "AndroidServerNode/1.0")
+                    if (!extractedToken.isNullOrBlank()) {
+                        setRequestProperty("PRIVATE-TOKEN", extractedToken) // Для GitLab
+                    }
+                }
+
+                var responseCode = conn.responseCode
+
+                // Пробуем ветку master, если main вернул 404
+                if (responseCode == 404 && downloadUrl.contains("/refs/heads/main.zip")) {
+                    val fallbackUrl = downloadUrl.replace("/refs/heads/main.zip", "/refs/heads/master.zip")
+                    conn = (URL(fallbackUrl).openConnection() as HttpURLConnection).apply {
+                        instanceFollowRedirects = true
+                        connectTimeout = 20000
+                        readTimeout = 40000
+                        setRequestProperty("User-Agent", "AndroidServerNode/1.0")
+                    }
+                    responseCode = conn.responseCode
+                }
+
+                if (responseCode == 301 || responseCode == 302 || responseCode == 307 || responseCode == 308) {
+                    val location = conn.getHeaderField("Location")
+                    conn = (URL(location).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 20000
+                        readTimeout = 40000
+                        setRequestProperty("User-Agent", "AndroidServerNode/1.0")
+                    }
+                    responseCode = conn.responseCode
+                }
+
+                if (responseCode !in 200..299) {
+                    val hint = if (responseCode == 404 || responseCode == 401 || responseCode == 403) {
+                        " (Возможно, репозиторий закрытый: укажите Personal Access Token или загрузите ZIP-архив)"
+                    } else ""
+                    return JSONObject().put("error", "Ошибка HTTP $responseCode при скачивании репозитория$hint")
+                }
+
+                zipBytes = conn.inputStream.use { it.readBytes() }
             }
 
-            if (responseCode !in 200..299) {
-                return JSONObject().put("error", "Ошибка загрузки HTTP $responseCode с $downloadUrl")
-            }
-
-            val zipBytes = redirectConn.inputStream.use { it.readBytes() }
             deployZip(cleanName, zipBytes, customCmd)
         } catch (e: Exception) {
             ServerService.addLog("Ошибка деплоя Git '$cleanUrl': ${e.message}", "ОШИБКА")

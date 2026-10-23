@@ -560,6 +560,7 @@ const btnTypeZip = document.getElementById('btnTypeZip');
 const groupGitDeploy = document.getElementById('groupGitDeploy');
 const groupZipDeploy = document.getElementById('groupZipDeploy');
 const inputGitUrl = document.getElementById('inputGitUrl');
+const inputGitToken = document.getElementById('inputGitToken');
 const inputZipFile = document.getElementById('inputZipFile');
 const btnPickZip = document.getElementById('btnPickZip');
 const txtZipChosen = document.getElementById('txtZipChosen');
@@ -646,6 +647,7 @@ if (btnDeployApp) {
 
     if (deployMode === 'git') {
       const url = inputGitUrl.value.trim();
+      const token = inputGitToken ? inputGitToken.value.trim() : '';
       if (!url) {
         showDeployStatus('Пожалуйста, укажите ссылку на Git-репозиторий', 'error');
         return;
@@ -656,7 +658,7 @@ if (btnDeployApp) {
         const res = await fetch(`${getBaseUrl()}/api/apps/deploy-git`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, name, command })
+          body: JSON.stringify({ url, name, command, token })
         });
         const data = await res.json();
         if (data.error) {

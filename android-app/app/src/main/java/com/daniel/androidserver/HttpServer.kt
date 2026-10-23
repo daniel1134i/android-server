@@ -166,10 +166,11 @@ class HttpServer(
                     val url = reqJson.optString("url", "").trim()
                     val name = reqJson.optString("name", "").trim()
                     val cmd = reqJson.optString("command", "").trim()
+                    val token = reqJson.optString("token", "").trim()
                     if (url.isEmpty()) {
                         sendJsonResponse(output, 400, JSONObject().put("error", "URL репозитория не указан"))
                     } else {
-                        val res = AppManager.deployGit(url, name.ifEmpty { null }, cmd.ifEmpty { null })
+                        val res = AppManager.deployGit(url, name.ifEmpty { null }, cmd.ifEmpty { null }, token.ifEmpty { null })
                         sendJsonResponse(output, if (res.has("error")) 400 else 200, res)
                     }
                 }
