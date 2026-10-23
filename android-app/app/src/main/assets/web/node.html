@@ -17,6 +17,17 @@
       <span class="brand-tag">ХОСТ-НОДА 01</span>
       <span class="brand-sub">АВТОНОМНЫЙ МИКРО-СЕРВЕР</span>
     </div>
+
+    <!-- Вкладки навигации -->
+    <nav class="node-tabs">
+      <button class="node-tab active" data-tab="telemetry">
+        <span class="tab-num">01</span> МОНИТОРИНГ
+      </button>
+      <button class="node-tab" data-tab="apps">
+        <span class="tab-num">02</span> ПРИЛОЖЕНИЯ
+      </button>
+    </nav>
+
     <div class="header-badges">
       <div id="badgeDaemon" class="badge badge-online">● ДЕМОН: ОНЛАЙН</div>
       <div id="badgeWifi" class="badge badge-dim">WI-FI: http://--:8080</div>
@@ -25,161 +36,241 @@
   </header>
 
   <main class="node-main">
-    <!-- Верхний блок: Статус и управление нодой -->
-    <section class="master-card">
-      <div class="master-left">
-        <div class="status-indicator-box">
-          <span class="pulse-led" id="pulseLed"></span>
-          <div>
-            <div class="status-headline" id="txtDaemonTitle">ДЕМОН АКТИВЕН И СЛУШАЕТ ПОРТ</div>
-            <div class="status-sub" id="txtDaemonSub">Прием запросов HTTP/JSON RPC на порту 8080 и mDNS на порту 8081</div>
+    <!-- ВКЛАДКА 1: МОНИТОРИНГ И ТЕЛЕМЕТРИЯ -->
+    <div id="tab-telemetry" class="node-tab-pane active">
+      <!-- Верхний блок: Статус и управление нодой -->
+      <section class="master-card">
+        <div class="master-left">
+          <div class="status-indicator-box">
+            <span class="pulse-led" id="pulseLed"></span>
+            <div>
+              <div class="status-headline" id="txtDaemonTitle">ДЕМОН АКТИВЕН И СЛУШАЕТ ПОРТ</div>
+              <div class="status-sub" id="txtDaemonSub">Прием запросов HTTP/JSON RPC на порту 8080 и mDNS на порту 8081</div>
+            </div>
+          </div>
+          <div class="endpoint-badges">
+            <div class="ep-chip">
+              <span class="ep-label">WI-FI</span>
+              <span class="ep-value" id="valWifiUrl">http://...:8080</span>
+            </div>
+            <div class="ep-chip">
+              <span class="ep-label">USB / ЛОКАЛЬНО</span>
+              <span class="ep-value">http://127.0.0.1:8080</span>
+            </div>
+            <div class="ep-chip" style="border-color: var(--agy-blue); background: rgba(77, 130, 241, 0.1);">
+              <span class="ep-label" style="color: var(--agy-blue-light);">☁ ОБЛАКО (ID)</span>
+              <span class="ep-value" id="valCloudId" style="color: var(--agy-blue-light); cursor: pointer;" title="Нажмите, чтобы увидеть секретный ключ">node_...</span>
+            </div>
+            <div class="ep-chip" id="chipAppsLink" style="cursor: pointer;" title="Открыть вкладку приложений">
+              <span class="ep-label">ПРИЛОЖЕНИЯ</span>
+              <span class="ep-value highlight-green" id="valAppsCount">0 активных ↗</span>
+            </div>
+            <div class="ep-chip">
+              <span class="ep-label">СЕРВИС</span>
+              <span class="ep-value">_android-server._tcp</span>
+            </div>
           </div>
         </div>
-        <div class="endpoint-badges">
-          <div class="ep-chip">
-            <span class="ep-label">WI-FI</span>
-            <span class="ep-value" id="valWifiUrl">http://...:8080</span>
+
+        <div class="master-actions">
+          <button id="btnDimScreen" class="btn-node btn-dim">
+            <span class="btn-icon">🌙</span> OLED ЭКО (ЭКОНОМИЯ 95%)
+          </button>
+          <button id="btnToggleDaemon" class="btn-node btn-toggle">
+            <span class="btn-icon">⏻</span> ОСТАНОВИТЬ ДЕМОН
+          </button>
+          <div class="pill-status">
+            <span class="pill-dot"></span> WAKELOCK: ЧАСТИЧНЫЙ (АКТИВЕН 24/7)
           </div>
-          <div class="ep-chip">
-            <span class="ep-label">USB / ЛОКАЛЬНО</span>
-            <span class="ep-value">http://127.0.0.1:8080</span>
+        </div>
+      </section>
+
+      <!-- Средний блок: 3 карточки телеметрии -->
+      <section class="telemetry-grid">
+        <!-- Батарея -->
+        <div class="node-card">
+          <div class="card-head">
+            <span class="card-title">БАТАРЕЯ И ТЕМПЕРАТУРА</span>
+            <span class="badge-mini" id="valBatStatus">ЗАРЯДКА</span>
           </div>
-          <div class="ep-chip" style="border-color: var(--agy-blue); background: rgba(77, 130, 241, 0.1);">
-            <span class="ep-label" style="color: var(--agy-blue-light);">☁ ОБЛАКО (ID)</span>
-            <span class="ep-value" id="valCloudId" style="color: var(--agy-blue-light); cursor: pointer;" title="Нажмите, чтобы увидеть секретный ключ">node_...</span>
+          <div class="metric-hero">
+            <span class="hero-num" id="valBatPct">--%</span>
+            <span class="hero-unit" id="valBatTemp">--°C</span>
           </div>
-          <div class="ep-chip">
-            <span class="ep-label">ПРИЛОЖЕНИЯ</span>
-            <span class="ep-value highlight-green" id="valAppsCount">0 активных</span>
+          <div class="progress-bar">
+            <div class="progress-fill fill-green" id="barBat"></div>
           </div>
-          <div class="ep-chip">
-            <span class="ep-label">СЕРВИС</span>
-            <span class="ep-value">_android-server._tcp</span>
+          <div class="card-kv-grid">
+            <div class="kv-item">
+              <span class="k">Источник питания</span>
+              <span class="v" id="valBatSource">--</span>
+            </div>
+            <div class="kv-item">
+              <span class="k">Здоровье батареи</span>
+              <span class="v highlight-green" id="valBatHealth">Отличное</span>
+            </div>
+            <div class="kv-item">
+              <span class="k">Сохранение ресурса</span>
+              <span class="v highlight-amber">Эко-диапазон 20% - 80%</span>
+            </div>
           </div>
+        </div>
+
+        <!-- Оперативная память и процессор -->
+        <div class="node-card">
+          <div class="card-head">
+            <span class="card-title">ОЗУ И ПРОИЗВОДИТЕЛЬНОСТЬ</span>
+            <span class="badge-mini" id="valRamPct">--%</span>
+          </div>
+          <div class="metric-hero">
+            <span class="hero-num" id="valRamUsed">--</span>
+            <span class="hero-unit">/ <span id="valRamTotal">--</span> ГБ ОЗУ</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill fill-amber" id="barRam"></div>
+          </div>
+          <div class="card-kv-grid">
+            <div class="kv-item">
+              <span class="k">Процессор</span>
+              <span class="v" id="valCpuCores">8 ядер</span>
+            </div>
+            <div class="kv-item">
+              <span class="k">Архитектура</span>
+              <span class="v" id="valCpuArch">arm64-v8a</span>
+            </div>
+            <div class="kv-item">
+              <span class="k">Белый список Doze</span>
+              <span class="v highlight-green">Без ограничений (Активен)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Накопитель и время работы -->
+        <div class="node-card">
+          <div class="card-head">
+            <span class="card-title">НАКОПИТЕЛЬ И АПТАЙМ</span>
+            <span class="badge-mini" id="valDiskPct">--%</span>
+          </div>
+          <div class="metric-hero">
+            <span class="hero-num" id="valDiskUsed">--</span>
+            <span class="hero-unit">/ <span id="valDiskTotal">--</span> ГБ ДИСК</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill fill-blue" id="barDisk"></div>
+          </div>
+          <div class="card-kv-grid">
+            <div class="kv-item">
+              <span class="k">Аптайм демона</span>
+              <span class="v highlight-green" id="valDaemonUptime">0ч 0м 0с</span>
+            </div>
+            <div class="kv-item">
+              <span class="k">Аптайм системы</span>
+              <span class="v" id="valSysUptime">--</span>
+            </div>
+            <div class="kv-item">
+              <span class="k">Модель устройства</span>
+              <span class="v" id="valDeviceModel">Redmi Pad SE</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Нижний блок: Журнал аудита в реальном времени -->
+      <section class="activity-card">
+        <div class="activity-head">
+          <div class="act-title-cluster">
+            <span class="terminal-prompt">&gt;_</span>
+            <span class="act-title">ЖУРНАЛ СОБЫТИЙ И АУДИТ В РЕАЛЬНОМ ВРЕМЕНИ</span>
+            <span class="badge-stream" id="badgeStream">В ЭФИРЕ</span>
+          </div>
+          <div class="act-buttons">
+            <button id="btnClearLogs" class="btn-sub">ОЧИСТИТЬ ЛОГИ</button>
+          </div>
+        </div>
+        <div class="log-stream-box" id="logStreamBox">
+          <div class="log-row sys">[СИСТЕМА] Панель управления хост-нодой инициализирована</div>
+          <div class="log-row sys">[ДЕМОН] Прослушивание 0.0.0.0:8080 (HTTP) и 0.0.0.0:8081 (Discovery)</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ВКЛАДКА 2: ПРИЛОЖЕНИЯ И ДЕПЛОЙ -->
+    <div id="tab-apps" class="node-tab-pane hidden">
+      <div class="apps-pane-header">
+        <div>
+          <h2 class="pane-title">[ УПРАВЛЕНИЕ ПРИЛОЖЕНИЯМИ И ДЕПЛОЙ ]</h2>
+          <span class="pane-subtitle">Развертывание Git-репозиториев и ZIP-архивов с автозапуском в /sdcard/ServerApps</span>
+        </div>
+        <div class="quick-btns">
+          <button id="btnRefreshApps" class="btn-node btn-sub">↻ ОБНОВИТЬ СПИСОК</button>
         </div>
       </div>
 
-      <div class="master-actions">
-        <button id="btnDimScreen" class="btn-node btn-dim">
-          <span class="btn-icon">🌙</span> OLED ЭКО (ЭКОНОМИЯ 95%)
-        </button>
-        <button id="btnToggleDaemon" class="btn-node btn-toggle">
-          <span class="btn-icon">⏻</span> ОСТАНОВИТЬ ДЕМОН
-        </button>
-        <div class="pill-status">
-          <span class="pill-dot"></span> WAKELOCK: ЧАСТИЧНЫЙ (АКТИВЕН 24/7)
+      <!-- Карточка деплоя -->
+      <section class="deploy-card">
+        <div class="deploy-type-toggle">
+          <button id="btnTypeGit" class="type-btn active">🌐 GIT РЕПОЗИТОРИЙ</button>
+          <button id="btnTypeZip" class="type-btn">📦 ZIP АРХИВ</button>
         </div>
-      </div>
-    </section>
 
-    <!-- Средний блок: 3 карточки телеметрии -->
-    <section class="telemetry-grid">
-      <!-- Батарея -->
-      <div class="node-card">
-        <div class="card-head">
-          <span class="card-title">БАТАРЕЯ И ТЕМПЕРАТУРА</span>
-          <span class="badge-mini" id="valBatStatus">ЗАРЯДКА</span>
+        <!-- Git Deploy -->
+        <div id="groupGitDeploy" class="deploy-form-group">
+          <label class="deploy-label">Ссылка на Git-репозиторий (GitHub / GitLab):</label>
+          <input type="text" id="inputGitUrl" class="pixel-input" placeholder="https://github.com/user/microservice-repo" />
+          <label class="deploy-label">Токен доступа (для закрытых репозиториев, опционально):</label>
+          <input type="password" id="inputGitToken" class="pixel-input" placeholder="ghp_xxxx или glpat-xxxx" />
         </div>
-        <div class="metric-hero">
-          <span class="hero-num" id="valBatPct">--%</span>
-          <span class="hero-unit" id="valBatTemp">--°C</span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill fill-green" id="barBat"></div>
-        </div>
-        <div class="card-kv-grid">
-          <div class="kv-item">
-            <span class="k">Источник питания</span>
-            <span class="v" id="valBatSource">--</span>
-          </div>
-          <div class="kv-item">
-            <span class="k">Здоровье батареи</span>
-            <span class="v highlight-green" id="valBatHealth">Отличное</span>
-          </div>
-          <div class="kv-item">
-            <span class="k">Сохранение ресурса</span>
-            <span class="v highlight-amber">Эко-диапазон 20% - 80%</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- Оперативная память и процессор -->
-      <div class="node-card">
-        <div class="card-head">
-          <span class="card-title">ОЗУ И ПРОИЗВОДИТЕЛЬНОСТЬ</span>
-          <span class="badge-mini" id="valRamPct">--%</span>
-        </div>
-        <div class="metric-hero">
-          <span class="hero-num" id="valRamUsed">--</span>
-          <span class="hero-unit">/ <span id="valRamTotal">--</span> ГБ ОЗУ</span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill fill-amber" id="barRam"></div>
-        </div>
-        <div class="card-kv-grid">
-          <div class="kv-item">
-            <span class="k">Процессор</span>
-            <span class="v" id="valCpuCores">8 ядер</span>
-          </div>
-          <div class="kv-item">
-            <span class="k">Архитектура</span>
-            <span class="v" id="valCpuArch">arm64-v8a</span>
-          </div>
-          <div class="kv-item">
-            <span class="k">Белый список Doze</span>
-            <span class="v highlight-green">Без ограничений (Активен)</span>
+        <!-- ZIP Deploy -->
+        <div id="groupZipDeploy" class="deploy-form-group hidden">
+          <label class="deploy-label">Выберите ZIP-архив с проектом:</label>
+          <div class="zip-pick-row">
+            <input type="file" id="inputZipFile" accept=".zip" style="display: none;" />
+            <button id="btnPickZip" class="btn-node btn-sub">📁 ВЫБРАТЬ ZIP ФАЙЛ</button>
+            <span id="txtZipChosen" class="zip-chosen-text">Файл не выбран</span>
           </div>
         </div>
-      </div>
 
-      <!-- Накопитель и время работы -->
-      <div class="node-card">
-        <div class="card-head">
-          <span class="card-title">НАКОПИТЕЛЬ И АПТАЙМ</span>
-          <span class="badge-mini" id="valDiskPct">--%</span>
-        </div>
-        <div class="metric-hero">
-          <span class="hero-num" id="valDiskUsed">--</span>
-          <span class="hero-unit">/ <span id="valDiskTotal">--</span> ГБ ДИСК</span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill fill-blue" id="barDisk"></div>
-        </div>
-        <div class="card-kv-grid">
-          <div class="kv-item">
-            <span class="k">Аптайм демона</span>
-            <span class="v highlight-green" id="valDaemonUptime">0ч 0м 0с</span>
+        <div class="deploy-inputs-row">
+          <div class="input-col">
+            <label class="deploy-label">Имя приложения (папка в /sdcard/ServerApps):</label>
+            <input type="text" id="inputAppName" class="pixel-input" placeholder="Напр. my-app" />
           </div>
-          <div class="kv-item">
-            <span class="k">Аптайм системы</span>
-            <span class="v" id="valSysUptime">--</span>
+          <div class="input-col">
+            <label class="deploy-label">Команда запуска (авто, если пусто):</label>
+            <input type="text" id="inputAppCmd" class="pixel-input" placeholder="sh start.sh / python3 main.py / node" />
           </div>
-          <div class="kv-item">
-            <span class="k">Модель устройства</span>
-            <span class="v" id="valDeviceModel">Redmi Pad SE</span>
-          </div>
+          <button id="btnDeployApp" class="btn-node btn-deploy">🚀 ЗАГРУЗИТЬ И ЗАПУСТИТЬ</button>
         </div>
-      </div>
-    </section>
 
-    <!-- Нижний блок: Журнал аудита в реальном времени -->
-    <section class="activity-card">
-      <div class="activity-head">
-        <div class="act-title-cluster">
-          <span class="terminal-prompt">&gt;_</span>
-          <span class="act-title">ЖУРНАЛ СОБЫТИЙ И АУДИТ В РЕАЛЬНОМ ВРЕМЕНИ</span>
-          <span class="badge-stream" id="badgeStream">В ЭФИРЕ</span>
+        <div id="deployStatusBox" class="deploy-status-box hidden"></div>
+      </section>
+
+      <!-- Список развернутых приложений -->
+      <section class="apps-list-section">
+        <div class="card-head" style="margin-bottom: 10px;">
+          <span class="card-title">РАЗВЕРНУТЫЕ ПРИЛОЖЕНИЯ В /SDCARD/SERVERAPPS</span>
         </div>
-        <div class="act-buttons">
-          <button id="btnClearLogs" class="btn-sub">ОЧИСТИТЬ ЛОГИ</button>
+        <div id="appsListGrid" class="apps-grid">
+          <div class="apps-empty">Загрузка списка приложений...</div>
         </div>
-      </div>
-      <div class="log-stream-box" id="logStreamBox">
-        <div class="log-row sys">[СИСТЕМА] Панель управления хост-нодой инициализирована</div>
-        <div class="log-row sys">[ДЕМОН] Прослушивание 0.0.0.0:8080 (HTTP) и 0.0.0.0:8081 (Discovery)</div>
-      </div>
-    </section>
+      </section>
+    </div>
   </main>
+
+  <!-- Модальное окно просмотра логов приложения -->
+  <div id="modalAppLogs" class="app-modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalAppTitle" class="modal-title">[ ЛОГИ ПРИЛОЖЕНИЯ ]</h3>
+        <div class="modal-actions">
+          <button id="btnModalRefreshLogs" class="btn-chip">↻ ОБНОВИТЬ</button>
+          <button id="btnModalCloseLogs" class="btn-chip btn-close-modal">✕ ЗАКРЫТЬ</button>
+        </div>
+      </div>
+      <div id="modalAppLogBody" class="modal-body">Загрузка логов...</div>
+    </div>
+  </div>
 
   <script src="node.js"></script>
 </body>
