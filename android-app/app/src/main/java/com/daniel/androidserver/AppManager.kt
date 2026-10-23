@@ -1,0 +1,335 @@
+package com.daniel.androidserver
+
+import android.content.Context
+import android.os.Environment
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.*
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.ZipInputStream
+
+object AppManager {
+
+    var appsDir: File = File(Environment.getExternalStorageDirectory(), "ServerApps")
+        private set
+
+    private data class RunningApp(
+        val name: String,
+        val process: Process,
+        val pid: Long,
+        val command: String,
+        val startTime: Long
+    )
+
+    private val activeApps = ConcurrentHashMap<String, RunningApp>()
+
+    fun init(context: Context? = null) {
+        try {
+            // Предпочитаем внешний каталог приложения (всегда доступен на запись в Android 11-15)
+            val base = if (context != null) {
+                context.getExternalFilesDir(null) ?: context.filesDir
+            } else {
+                File(Environment.getExternalStorageDirectory(), "ServerApps")
+            }
+            appsDir = File(base, "ServerApps")
+            if (!appsDir.exists()) appsDir.mkdirs()
+            createSampleAppIfEmpty()
+        } catch (_: Exception) {}
+    }
+
+    private fun createSampleAppIfEmpty() {
+        try {
+            val existing = appsDir.listFiles()?.filter { it.isDirectory }
+            if (existing.isNullOrEmpty()) {
+                val sampleDir = File(appsDir, "demo-service")
+                sampleDir.mkdirs()
+                val script = File(sampleDir, "start.sh")
+                script.writeText(
+                    """
+                    #!/system/bin/sh
+                    echo "[ДЕМО-СЕРВИС] Автономный процесс запущен: $(date)"
+                    while true; do
+                      echo "[ДЕМО-СЕРВИС] Сервер работает в фоне: $(date)"
+                      sleep 20
+                    done
+                    """.trimIndent()
+                )
+                try { Runtime.getRuntime().exec("chmod 755 ${script.absolutePath}") } catch (_: Exception) {}
+                startApp("demo-service")
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun listApps(): JSONArray {
+        val arr = JSONArray()
+        val dirs = appsDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+
+        for (dir in dirs) {
+            val name = dir.name
+            val running = activeApps[name]
+            val isAlive = running?.process?.isAlive == true
+
+            if (!isAlive && running != null) {
+                activeApps.remove(name)
+            }
+
+            val cmd = getStartCommand(dir)
+            val logFile = File(dir, "app.log")
+            val logPreview = if (logFile.exists()) {
+                try {
+                    logFile.readLines().takeLast(20).joinToString("\n")
+                } catch (_: Exception) { "" }
+            } else ""
+
+            val item = JSONObject().apply {
+                put("name", name)
+                put("path", dir.absolutePath)
+                put("running", isAlive)
+                put("pid", if (isAlive) running?.pid else -1)
+                put("command", cmd)
+                put("uptime_s", if (isAlive && running != null) (System.currentTimeMillis() - running.startTime) / 1000 else 0)
+                put("last_log", logPreview)
+            }
+            arr.put(item)
+        }
+        return arr
+    }
+
+    fun startApp(name: String, customCmd: String? = null): JSONObject {
+        val dir = File(appsDir, name)
+        if (!dir.exists() || !dir.isDirectory) {
+            return JSONObject().put("error", "Приложение не найдено: $name")
+        }
+
+        stopApp(name)
+
+        if (!customCmd.isNullOrBlank()) {
+            File(dir, ".start_cmd").writeText(customCmd.trim())
+        }
+
+        val cmd = getStartCommand(dir)
+        val logFile = File(dir, "app.log")
+
+        return try {
+            val pb = ProcessBuilder("sh", "-c", cmd)
+                .directory(dir)
+                .redirectErrorStream(true)
+
+            // Запись вывода в файл лога
+            val process = pb.start()
+            val pid = extractPid(process)
+
+            Thread {
+                try {
+                    val writer = FileWriter(logFile, true)
+                    process.inputStream.bufferedReader().use { reader ->
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null) {
+                            writer.write("[${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())}] $line\n")
+                            writer.flush()
+                        }
+                    }
+                    writer.close()
+                } catch (_: Exception) {}
+            }.start()
+
+            activeApps[name] = RunningApp(name, process, pid, cmd, System.currentTimeMillis())
+            ServerService.addLog("Приложение '$name' успешно запущено (PID: $pid, Команда: $cmd)", "ПРИЛОЖЕНИЯ")
+
+            JSONObject().apply {
+                put("status", "ok")
+                put("name", name)
+                put("pid", pid)
+                put("command", cmd)
+            }
+        } catch (e: Exception) {
+            ServerService.addLog("Ошибка запуска '$name': ${e.message}", "ОШИБКА")
+            JSONObject().put("error", "Не удалось запустить: ${e.message}")
+        }
+    }
+
+    fun stopApp(name: String): Boolean {
+        val running = activeApps.remove(name) ?: return false
+        return try {
+            running.process.destroyForcibly()
+            ServerService.addLog("Приложение '$name' остановлено", "ПРИЛОЖЕНИЯ")
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun deleteApp(name: String): Boolean {
+        stopApp(name)
+        val dir = File(appsDir, name)
+        val ok = dir.deleteRecursively()
+        if (ok) {
+            ServerService.addLog("Приложение '$name' удалено из /sdcard/ServerApps", "ПРИЛОЖЕНИЯ")
+        }
+        return ok
+    }
+
+    fun getAppLogs(name: String): String {
+        val logFile = File(appsDir, "$name/app.log")
+        if (!logFile.exists()) return "Логи отсутствуют"
+        return try {
+            logFile.readLines().takeLast(200).joinToString("\n")
+        } catch (e: Exception) {
+            "Ошибка чтения логов: ${e.message}"
+        }
+    }
+
+    fun deployZip(appName: String, zipData: ByteArray, customCmd: String? = null): JSONObject {
+        val cleanName = appName.replace(Regex("[^a-zA-Z0-9._-]"), "_").ifEmpty { "app_" + System.currentTimeMillis() }
+        val targetDir = File(appsDir, cleanName)
+        if (targetDir.exists()) stopApp(cleanName)
+        targetDir.mkdirs()
+
+        try {
+            unzip(ByteArrayInputStream(zipData), targetDir)
+            if (!customCmd.isNullOrBlank()) {
+                File(targetDir, ".start_cmd").writeText(customCmd.trim())
+            }
+            ensureExecutablePermissions(targetDir)
+            ServerService.addLog("ZIP архив развернут в: ${targetDir.absolutePath}", "ДЕПЛОЙ")
+            return startApp(cleanName, customCmd)
+        } catch (e: Exception) {
+            ServerService.addLog("Ошибка распаковки ZIP '$cleanName': ${e.message}", "ОШИБКА")
+            return JSONObject().put("error", "Ошибка распаковки архива: ${e.message}")
+        }
+    }
+
+    fun deployGit(gitUrl: String, customName: String? = null, customCmd: String? = null): JSONObject {
+        val cleanUrl = gitUrl.trim()
+        val derivedName = customName?.ifBlank { null }
+            ?: cleanUrl.removeSuffix("/").removeSuffix(".git").substringAfterLast("/")
+        val cleanName = derivedName.replace(Regex("[^a-zA-Z0-9._-]"), "_").ifEmpty { "git_app" }
+
+        val downloadUrl = resolveArchiveUrl(cleanUrl)
+        ServerService.addLog("Загрузка репозитория с: $downloadUrl", "ДЕПЛОЙ")
+
+        return try {
+            val url = URL(downloadUrl)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 30000
+            conn.setRequestProperty("User-Agent", "AndroidServerNode/1.0")
+
+            var responseCode = conn.responseCode
+            var redirectConn = conn
+            if (responseCode == HttpURLConnection.HTTP_MOVED_TEMP || responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == 307 || responseCode == 308) {
+                val newUrl = conn.getHeaderField("Location")
+                redirectConn = URL(newUrl).openConnection() as HttpURLConnection
+                redirectConn.connectTimeout = 15000
+                redirectConn.readTimeout = 30000
+                redirectConn.setRequestProperty("User-Agent", "AndroidServerNode/1.0")
+                responseCode = redirectConn.responseCode
+            }
+
+            if (responseCode !in 200..299) {
+                return JSONObject().put("error", "Ошибка загрузки HTTP $responseCode с $downloadUrl")
+            }
+
+            val zipBytes = redirectConn.inputStream.use { it.readBytes() }
+            deployZip(cleanName, zipBytes, customCmd)
+        } catch (e: Exception) {
+            ServerService.addLog("Ошибка деплоя Git '$cleanUrl': ${e.message}", "ОШИБКА")
+            JSONObject().put("error", "Не удалось скачать репозиторий: ${e.message}")
+        }
+    }
+
+    private fun resolveArchiveUrl(gitUrl: String): String {
+        var base = gitUrl.removeSuffix(".git").removeSuffix("/")
+        if (base.contains("github.com")) {
+            return "$base/archive/refs/heads/main.zip"
+        }
+        if (base.contains("gitlab.com")) {
+            val repoName = base.substringAfterLast("/")
+            return "$base/-/archive/main/$repoName-main.zip"
+        }
+        return base
+    }
+
+    private fun getStartCommand(dir: File): String {
+        val cmdFile = File(dir, ".start_cmd")
+        if (cmdFile.exists()) {
+            val c = cmdFile.readText().trim()
+            if (c.isNotEmpty()) return c
+        }
+
+        // Автоопределение файла точки входа
+        return when {
+            File(dir, "start.sh").exists() -> "sh start.sh"
+            File(dir, "run.sh").exists() -> "sh run.sh"
+            File(dir, "main.sh").exists() -> "sh main.sh"
+            File(dir, "main.py").exists() -> "python3 main.py"
+            File(dir, "app.py").exists() -> "python3 app.py"
+            File(dir, "server.js").exists() -> "node server.js"
+            File(dir, "index.js").exists() -> "node index.js"
+            File(dir, "package.json").exists() -> "npm start"
+            else -> {
+                // Создать start.sh по умолчанию
+                val s = File(dir, "start.sh")
+                s.writeText("#!/system/bin/sh\necho 'Сервис ${dir.name} запущен'\nwhile true; do sleep 30; done\n")
+                try { Runtime.getRuntime().exec("chmod 755 ${s.absolutePath}") } catch (_: Exception) {}
+                "sh start.sh"
+            }
+        }
+    }
+
+    private fun ensureExecutablePermissions(dir: File) {
+        dir.walkTopDown().forEach { f ->
+            if (f.extension in listOf("sh", "py", "js")) {
+                try { Runtime.getRuntime().exec("chmod 755 ${f.absolutePath}") } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private fun unzip(input: InputStream, targetDir: File) {
+        ZipInputStream(input).use { zis ->
+            var entry = zis.nextEntry
+            var stripRootPrefix: String? = null
+
+            // Проверка, есть ли в архиве единственная корневая папка (типично для GitHub архивов)
+            while (entry != null) {
+                val name = entry.name
+                if (stripRootPrefix == null && name.contains("/") && !name.startsWith("/")) {
+                    val firstSlash = name.indexOf('/')
+                    val possibleRoot = name.substring(0, firstSlash + 1)
+                    if (entry.isDirectory && name == possibleRoot) {
+                        stripRootPrefix = possibleRoot
+                    }
+                }
+
+                val cleanName = if (stripRootPrefix != null && name.startsWith(stripRootPrefix)) {
+                    name.substring(stripRootPrefix.length)
+                } else name
+
+                if (cleanName.isNotEmpty()) {
+                    val outFile = File(targetDir, cleanName)
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        FileOutputStream(outFile).use { fos -> zis.copyTo(fos) }
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+    }
+
+    private fun extractPid(process: Process): Long {
+        return try {
+            val field = process.javaClass.getDeclaredField("pid")
+            field.isAccessible = true
+            field.getLong(process)
+        } catch (_: Exception) {
+            -1L
+        }
+    }
+}

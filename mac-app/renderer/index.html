@@ -14,6 +14,7 @@
   <header class="app-header">
     <div class="drag-region">
       <div class="brand">
+        <img src="logo.png" class="brand-logo-img" alt="logo" />
         <span class="brand-title"><span class="highlight">АНДРОИД</span> СЕРВЕР</span>
         <span class="brand-tag">АВТО-НОДА</span>
       </div>
@@ -55,16 +56,20 @@
           <span class="nav-num">03</span>
           <span class="nav-label">ФАЙЛЫ</span>
         </li>
-        <li class="nav-item" data-tab="logs">
+        <li class="nav-item" data-tab="apps">
           <span class="nav-num">04</span>
+          <span class="nav-label">ПРИЛОЖЕНИЯ</span>
+        </li>
+        <li class="nav-item" data-tab="logs">
+          <span class="nav-num">05</span>
           <span class="nav-label">ЛОГИ</span>
         </li>
         <li class="nav-item" data-tab="power">
-          <span class="nav-num">05</span>
+          <span class="nav-num">06</span>
           <span class="nav-label">ПИТАНИЕ И ЭКО</span>
         </li>
         <li class="nav-item" data-tab="settings">
-          <span class="nav-num">06</span>
+          <span class="nav-num">07</span>
           <span class="nav-label">ПОДКЛЮЧЕНИЕ</span>
         </li>
       </ul>
@@ -248,7 +253,63 @@
         </div>
       </section>
 
-      <!-- ВКЛАДКА 4: ЛОГИ И АУДИТ -->
+      <!-- ВКЛАДКА 4: ПРИЛОЖЕНИЯ И ДЕПЛОЙ -->
+      <section id="tab-apps" class="tab-pane">
+        <div class="pane-header flex-between">
+          <div>
+            <h2>[ УПРАВЛЕНИЕ ПРИЛОЖЕНИЯМИ И ДЕПЛОЙ ]</h2>
+            <span class="header-desc">Развертывание Git-репозиториев и ZIP-архивов с автозапуском в /sdcard/ServerApps</span>
+          </div>
+          <div class="quick-btns">
+            <button id="btnRefreshApps" class="btn-chip">↻ ОБНОВИТЬ СПИСОК</button>
+          </div>
+        </div>
+
+        <!-- Карточка деплоя -->
+        <div class="deploy-card">
+          <div class="deploy-type-toggle">
+            <button id="btnTypeGit" class="type-btn active">🌐 GIT РЕПОЗИТОРИЙ</button>
+            <button id="btnTypeZip" class="type-btn">📦 ZIP АРХИВ</button>
+          </div>
+
+          <!-- Поле Git URL -->
+          <div id="groupGitDeploy" class="deploy-form-group">
+            <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Ссылка на Git-репозиторий (GitHub / GitLab):</label>
+            <input type="text" id="inputGitUrl" class="pixel-input" placeholder="https://github.com/user/microservice-repo" style="width: 100%; margin-bottom: 10px;" />
+          </div>
+
+          <!-- Поле ZIP Upload -->
+          <div id="groupZipDeploy" class="deploy-form-group hidden">
+            <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Выберите локальный ZIP-архив с проектом:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+              <input type="file" id="inputZipFile" accept=".zip" style="display: none;" />
+              <button id="btnPickZip" class="btn-pixel-secondary">📁 ВЫБРАТЬ ZIP ФАЙЛ</button>
+              <span id="txtZipChosen" style="font-size: 11px; color: var(--agy-blue-light);">Файл не выбран</span>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end;">
+            <div>
+              <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Имя приложения (папка в /sdcard/ServerApps):</label>
+              <input type="text" id="inputAppName" class="pixel-input" placeholder="Напр. my-app" style="width: 100%;" />
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Команда запуска (авто, если пусто):</label>
+              <input type="text" id="inputAppCmd" class="pixel-input" placeholder="sh start.sh / main.py / node" style="width: 100%;" />
+            </div>
+            <button id="btnDeployApp" class="btn-pixel" style="height: 38px;">🚀 ЗАГРУЗИТЬ И ЗАПУСТИТЬ</button>
+          </div>
+
+          <div id="deployStatusBox" class="deploy-status-box hidden"></div>
+        </div>
+
+        <div class="card-title" style="margin-bottom: 10px;">РАЗВЕРНУТЫЕ ПРИЛОЖЕНИЯ В /SDCARD/SERVERAPPS</div>
+        <div id="appsListGrid" class="apps-grid">
+          <div style="color: var(--text-muted); font-size: 12px; padding: 10px;">Загрузка списка приложений...</div>
+        </div>
+      </section>
+
+      <!-- ВКЛАДКА 5: ЛОГИ И АУДИТ -->
       <section id="tab-logs" class="tab-pane">
         <div class="pane-header flex-between">
           <div>
@@ -348,6 +409,20 @@
       </section>
 
     </main>
+  </div>
+
+  <!-- Модальное окно просмотра логов конкретного приложения -->
+  <div id="modalAppLogs" class="app-modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalAppTitle" style="font-family: var(--font-pixel); font-size: 13px; color: var(--agy-blue-light);">[ ЛОГИ ПРИЛОЖЕНИЯ ]</h3>
+        <div style="display: flex; gap: 8px;">
+          <button id="btnModalRefreshLogs" class="btn-chip">↻ ОБНОВИТЬ</button>
+          <button id="btnModalCloseLogs" class="btn-chip" style="background: var(--agy-coral); color: #fff;">✕ ЗАКРЫТЬ</button>
+        </div>
+      </div>
+      <div id="modalAppLogBody" class="modal-body">Загрузка логов...</div>
+    </div>
   </div>
 
   <script src="app.js"></script>

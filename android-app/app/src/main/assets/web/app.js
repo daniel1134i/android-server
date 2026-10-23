@@ -88,6 +88,9 @@ document.querySelectorAll('.nav-item').forEach(item => {
     if (item.dataset.tab === 'files') {
       loadFiles(currentPath);
     }
+    if (item.dataset.tab === 'apps') {
+      loadAppsList();
+    }
     if (item.dataset.tab === 'logs') {
       fetchRemoteLogs();
     }
@@ -548,6 +551,293 @@ if (btnCopyLogs) {
     navigator.clipboard.writeText(text);
     btnCopyLogs.textContent = 'СКОПИРОВАНО!';
     setTimeout(() => { btnCopyLogs.textContent = 'КОПИРОВАТЬ ВСЁ'; }, 2000);
+  });
+}
+
+// Управление приложениями и деплой
+const btnTypeGit = document.getElementById('btnTypeGit');
+const btnTypeZip = document.getElementById('btnTypeZip');
+const groupGitDeploy = document.getElementById('groupGitDeploy');
+const groupZipDeploy = document.getElementById('groupZipDeploy');
+const inputGitUrl = document.getElementById('inputGitUrl');
+const inputZipFile = document.getElementById('inputZipFile');
+const btnPickZip = document.getElementById('btnPickZip');
+const txtZipChosen = document.getElementById('txtZipChosen');
+const inputAppName = document.getElementById('inputAppName');
+const inputAppCmd = document.getElementById('inputAppCmd');
+const btnDeployApp = document.getElementById('btnDeployApp');
+const deployStatusBox = document.getElementById('deployStatusBox');
+const btnRefreshApps = document.getElementById('btnRefreshApps');
+const appsListGrid = document.getElementById('appsListGrid');
+
+const modalAppLogs = document.getElementById('modalAppLogs');
+const modalAppTitle = document.getElementById('modalAppTitle');
+const modalAppLogBody = document.getElementById('modalAppLogBody');
+const btnModalRefreshLogs = document.getElementById('btnModalRefreshLogs');
+const btnModalCloseLogs = document.getElementById('btnModalCloseLogs');
+
+let deployMode = 'git'; // 'git' или 'zip'
+let chosenZipBase64 = null;
+let currentViewingApp = null;
+
+if (btnTypeGit && btnTypeZip) {
+  btnTypeGit.addEventListener('click', () => {
+    deployMode = 'git';
+    btnTypeGit.classList.add('active');
+    btnTypeZip.classList.remove('active');
+    groupGitDeploy.classList.remove('hidden');
+    groupZipDeploy.classList.add('hidden');
+  });
+
+  btnTypeZip.addEventListener('click', () => {
+    deployMode = 'zip';
+    btnTypeZip.classList.add('active');
+    btnTypeGit.classList.remove('active');
+    groupZipDeploy.classList.remove('hidden');
+    groupGitDeploy.classList.add('hidden');
+  });
+}
+
+if (btnPickZip && inputZipFile) {
+  btnPickZip.addEventListener('click', () => inputZipFile.click());
+  inputZipFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      txtZipChosen.textContent = `${file.name} (${formatFileSize(file.size)})`;
+      if (!inputAppName.value.trim()) {
+        inputAppName.value = file.name.replace(/\.zip$/i, '');
+      }
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const dataUrl = evt.target.result;
+        chosenZipBase64 = dataUrl.split(',')[1];
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+}
+
+if (inputGitUrl) {
+  inputGitUrl.addEventListener('input', () => {
+    if (!inputAppName.value.trim() && inputGitUrl.value.trim()) {
+      const parts = inputGitUrl.value.trim().replace(/\.git$/i, '').split('/');
+      const last = parts[parts.length - 1];
+      if (last) inputAppName.value = last;
+    }
+  });
+}
+
+function showDeployStatus(msg, type = 'loading') {
+  if (!deployStatusBox) return;
+  deployStatusBox.className = `deploy-status-box ${type}`;
+  deployStatusBox.textContent = msg;
+  deployStatusBox.classList.remove('hidden');
+}
+
+if (btnDeployApp) {
+  btnDeployApp.addEventListener('click', async () => {
+    const name = inputAppName.value.trim();
+    const command = inputAppCmd.value.trim();
+
+    if (!name) {
+      showDeployStatus('Пожалуйста, укажите имя приложения (папку)', 'error');
+      return;
+    }
+
+    if (deployMode === 'git') {
+      const url = inputGitUrl.value.trim();
+      if (!url) {
+        showDeployStatus('Пожалуйста, укажите ссылку на Git-репозиторий', 'error');
+        return;
+      }
+
+      showDeployStatus(`Загрузка и деплой репозитория '${name}'...`, 'loading');
+      try {
+        const res = await fetch(`${getBaseUrl()}/api/apps/deploy-git`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, name, command })
+        });
+        const data = await res.json();
+        if (data.error) {
+          showDeployStatus(`Ошибка деплоя: ${data.error}`, 'error');
+        } else {
+          showDeployStatus(`✓ Приложение '${name}' успешно развернуто и запущено! (PID: ${data.pid || '--'})`, 'success');
+          loadAppsList();
+        }
+      } catch (err) {
+        showDeployStatus(`Сетевая ошибка: ${err.message}`, 'error');
+      }
+    } else {
+      if (!chosenZipBase64) {
+        showDeployStatus('Пожалуйста, выберите ZIP-файл для загрузки', 'error');
+        return;
+      }
+
+      showDeployStatus(`Загрузка архива и запуск приложения '${name}'...`, 'loading');
+      try {
+        const res = await fetch(`${getBaseUrl()}/api/apps/deploy-zip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, zip_base64: chosenZipBase64, command })
+        });
+        const data = await res.json();
+        if (data.error) {
+          showDeployStatus(`Ошибка деплоя: ${data.error}`, 'error');
+        } else {
+          showDeployStatus(`✓ Приложение '${name}' успешно развернуто и запущено! (PID: ${data.pid || '--'})`, 'success');
+          loadAppsList();
+        }
+      } catch (err) {
+        showDeployStatus(`Сетевая ошибка: ${err.message}`, 'error');
+      }
+    }
+  });
+}
+
+if (btnRefreshApps) {
+  btnRefreshApps.addEventListener('click', loadAppsList);
+}
+
+async function loadAppsList() {
+  if (!appsListGrid) return;
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/apps`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const apps = data.apps || [];
+
+    if (apps.length === 0) {
+      appsListGrid.innerHTML = `
+        <div style="grid-column: 1/-1; padding: 24px; text-align: center; color: var(--text-muted); background: var(--bg-surface); border: 1px dashed var(--border-color);">
+          <div style="font-size: 24px; margin-bottom: 8px;">📦</div>
+          <div>Нет установленных приложений в /sdcard/ServerApps</div>
+          <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Используйте форму выше для деплоя Git репозитория или ZIP архива</div>
+        </div>
+      `;
+      return;
+    }
+
+    appsListGrid.innerHTML = apps.map(app => {
+      const isRunning = app.running;
+      const statusBadge = isRunning ? 
+        `<span class="app-badge-running">● ЗАПУЩЕНО</span>` : 
+        `<span class="app-badge-stopped">○ ОСТАНОВЛЕНО</span>`;
+
+      const uptimeStr = isRunning ? formatSeconds(app.uptime_s) : '--';
+      const pidStr = isRunning ? app.pid : '--';
+
+      return `
+        <div class="app-card ${isRunning ? 'running' : 'stopped'}">
+          <div class="app-head">
+            <span class="app-title">${escapeHtml(app.name)}</span>
+            ${statusBadge}
+          </div>
+          <div class="app-info-row">
+            <span class="label">Путь:</span>
+            <span class="val">${escapeHtml(app.path)}</span>
+          </div>
+          <div class="app-info-row">
+            <span class="label">PID:</span>
+            <span class="val">${pidStr}</span>
+          </div>
+          <div class="app-info-row">
+            <span class="label">Аптайм:</span>
+            <span class="val">${uptimeStr}</span>
+          </div>
+          <div class="app-info-row">
+            <span class="label">Команда:</span>
+            <span class="val" style="color: var(--agy-amber);">${escapeHtml(app.command)}</span>
+          </div>
+
+          <div class="app-actions-row">
+            ${isRunning ? 
+              `<button class="btn-chip btn-stop-app" data-name="${escapeHtml(app.name)}" style="color: var(--agy-coral); border-color: var(--agy-coral);">⏻ ОСТАНОВИТЬ</button>` : 
+              `<button class="btn-chip btn-start-app" data-name="${escapeHtml(app.name)}" style="color: var(--agy-green); border-color: var(--agy-green);">▶ ЗАПУСТИТЬ</button>`
+            }
+            <button class="btn-chip btn-view-app-logs" data-name="${escapeHtml(app.name)}">📋 ЛОГИ</button>
+            <button class="btn-chip btn-del-app" data-name="${escapeHtml(app.name)}" style="margin-left: auto; color: var(--text-dim);">🗑 УДАЛИТЬ</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Вешаем слушатели на кнопки карточек
+    appsListGrid.querySelectorAll('.btn-stop-app').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.textContent = '...';
+        await fetch(`${getBaseUrl()}/api/apps/stop`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: btn.dataset.name })
+        });
+        loadAppsList();
+      });
+    });
+
+    appsListGrid.querySelectorAll('.btn-start-app').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.textContent = '...';
+        await fetch(`${getBaseUrl()}/api/apps/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: btn.dataset.name })
+        });
+        loadAppsList();
+      });
+    });
+
+    appsListGrid.querySelectorAll('.btn-del-app').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (confirm(`Удалить приложение '${btn.dataset.name}' и все его файлы из /sdcard/ServerApps?`)) {
+          btn.textContent = '...';
+          await fetch(`${getBaseUrl()}/api/apps/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: btn.dataset.name })
+          });
+          loadAppsList();
+        }
+      });
+    });
+
+    appsListGrid.querySelectorAll('.btn-view-app-logs').forEach(btn => {
+      btn.addEventListener('click', () => {
+        openAppLogsModal(btn.dataset.name);
+      });
+    });
+
+  } catch (err) {
+    appsListGrid.innerHTML = `<div style="color: var(--agy-coral); padding: 10px;">Ошибка загрузки приложений: ${err.message}</div>`;
+  }
+}
+
+async function openAppLogsModal(appName) {
+  currentViewingApp = appName;
+  modalAppTitle.textContent = `[ ЛОГИ ПРИЛОЖЕНИЯ: ${appName} ]`;
+  modalAppLogBody.textContent = 'Загрузка логов...';
+  modalAppLogs.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/apps/logs?name=${encodeURIComponent(appName)}`);
+    const data = await res.json();
+    modalAppLogBody.textContent = data.logs || 'Логи пусты';
+    modalAppLogBody.scrollTop = modalAppLogBody.scrollHeight;
+  } catch (err) {
+    modalAppLogBody.textContent = `Ошибка получения логов: ${err.message}`;
+  }
+}
+
+if (btnModalCloseLogs) {
+  btnModalCloseLogs.addEventListener('click', () => {
+    modalAppLogs.classList.add('hidden');
+    currentViewingApp = null;
+  });
+}
+
+if (btnModalRefreshLogs) {
+  btnModalRefreshLogs.addEventListener('click', () => {
+    if (currentViewingApp) openAppLogsModal(currentViewingApp);
   });
 }
 

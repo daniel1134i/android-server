@@ -10,8 +10,9 @@ function createWindow() {
     height: 760,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#181816',
+    backgroundColor: '#191a1b',
     titleBarStyle: 'hiddenInset',
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -23,6 +24,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin' && app.dock) {
+    try { app.dock.setIcon(path.join(__dirname, 'icon.png')); } catch (_) {}
+  }
   createWindow();
 
   app.on('activate', () => {

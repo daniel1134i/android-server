@@ -88,15 +88,16 @@ class HttpServer(
             val bodyBuilder = StringBuilder()
             if (method == "POST") {
                 val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
-                if (contentLength in 1..1048576) {
-                    val buf = CharArray(contentLength)
-                    var read = 0
-                    while (read < contentLength) {
-                        val n = input.read(buf, read, contentLength - read)
+                if (contentLength in 1..52428800) {
+                    val buf = CharArray(8192)
+                    var remaining = contentLength
+                    while (remaining > 0) {
+                        val toRead = minOf(remaining, buf.size)
+                        val n = input.read(buf, 0, toRead)
                         if (n == -1) break
-                        read += n
+                        bodyBuilder.append(buf, 0, n)
+                        remaining -= n
                     }
-                    bodyBuilder.append(buf, 0, read)
                 }
             }
 
@@ -149,6 +150,74 @@ class HttpServer(
                     ServerService.logRing.clear()
                     ServerService.addLog("Logs cleared by user", "SYSTEM")
                     sendJsonResponse(output, 200, JSONObject().put("status", "ok"))
+                }
+
+                uriPath == "/api/apps" -> {
+                    val resp = JSONObject().apply {
+                        put("status", "ok")
+                        put("apps", AppManager.listApps())
+                        put("dir", AppManager.appsDir.absolutePath)
+                    }
+                    sendJsonResponse(output, 200, resp)
+                }
+
+                uriPath == "/api/apps/deploy-git" && method == "POST" -> {
+                    val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
+                    val url = reqJson.optString("url", "").trim()
+                    val name = reqJson.optString("name", "").trim()
+                    val cmd = reqJson.optString("command", "").trim()
+                    if (url.isEmpty()) {
+                        sendJsonResponse(output, 400, JSONObject().put("error", "URL репозитория не указан"))
+                    } else {
+                        val res = AppManager.deployGit(url, name.ifEmpty { null }, cmd.ifEmpty { null })
+                        sendJsonResponse(output, if (res.has("error")) 400 else 200, res)
+                    }
+                }
+
+                uriPath == "/api/apps/deploy-zip" && method == "POST" -> {
+                    val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
+                    val name = reqJson.optString("name", queryParams["name"] ?: "").trim()
+                    val cmd = reqJson.optString("command", "").trim()
+                    val base64Data = reqJson.optString("zip_base64", "")
+                    if (base64Data.isNotEmpty()) {
+                        try {
+                            val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                            val res = AppManager.deployZip(name.ifEmpty { "app" }, bytes, cmd.ifEmpty { null })
+                            sendJsonResponse(output, if (res.has("error")) 400 else 200, res)
+                        } catch (e: Exception) {
+                            sendJsonResponse(output, 400, JSONObject().put("error", "Ошибка декодирования base64: ${e.message}"))
+                        }
+                    } else {
+                        sendJsonResponse(output, 400, JSONObject().put("error", "Отсутствуют данные zip_base64"))
+                    }
+                }
+
+                uriPath == "/api/apps/start" && method == "POST" -> {
+                    val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
+                    val name = reqJson.optString("name", "").trim()
+                    val cmd = reqJson.optString("command", "").trim()
+                    val res = AppManager.startApp(name, cmd.ifEmpty { null })
+                    sendJsonResponse(output, if (res.has("error")) 400 else 200, res)
+                }
+
+                uriPath == "/api/apps/stop" && method == "POST" -> {
+                    val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
+                    val name = reqJson.optString("name", "").trim()
+                    val ok = AppManager.stopApp(name)
+                    sendJsonResponse(output, 200, JSONObject().put("status", if (ok) "ok" else "not_running"))
+                }
+
+                uriPath == "/api/apps/delete" && method == "POST" -> {
+                    val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
+                    val name = reqJson.optString("name", "").trim()
+                    val ok = AppManager.deleteApp(name)
+                    sendJsonResponse(output, 200, JSONObject().put("status", if (ok) "ok" else "error"))
+                }
+
+                uriPath == "/api/apps/logs" -> {
+                    val name = queryParams["name"] ?: ""
+                    val logs = AppManager.getAppLogs(name)
+                    sendJsonResponse(output, 200, JSONObject().put("name", name).put("logs", logs))
                 }
 
                 uriPath == "/api/exec" && method == "POST" -> {

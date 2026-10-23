@@ -711,3 +711,184 @@ body {
 .log-lvl-err { background: rgba(223, 99, 71, 0.2); color: var(--agy-coral); }
 .log-lvl-green { background: rgba(131, 179, 104, 0.2); color: #94c55f; }
 .log-msg { color: var(--text-main); word-break: break-all; }
+
+/* Apps Tab & Deployment */
+.deploy-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.deploy-type-toggle {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.type-btn {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  padding: 6px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.type-btn.active {
+  background: rgba(77, 130, 241, 0.2);
+  border-color: var(--agy-blue);
+  color: var(--agy-blue-light);
+}
+
+.deploy-status-box {
+  padding: 8px 12px;
+  border-radius: 2px;
+  font-size: 11px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deploy-status-box.success {
+  background: rgba(131, 179, 104, 0.2);
+  border: 1px solid var(--agy-green);
+  color: #94c55f;
+}
+
+.deploy-status-box.error {
+  background: rgba(223, 99, 71, 0.2);
+  border: 1px solid var(--agy-coral);
+  color: #df6347;
+}
+
+.deploy-status-box.loading {
+  background: rgba(77, 130, 241, 0.2);
+  border: 1px solid var(--agy-blue);
+  color: var(--agy-blue-light);
+}
+
+.apps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  overflow-y: auto;
+  max-height: calc(100vh - 380px);
+}
+
+.app-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.app-card.running {
+  border-left: 4px solid var(--agy-green);
+}
+
+.app-card.stopped {
+  border-left: 4px solid var(--text-dim);
+}
+
+.app-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.app-title {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--text-main);
+  letter-spacing: 0.5px;
+}
+
+.app-badge-running {
+  font-size: 10px;
+  background: rgba(131, 179, 104, 0.2);
+  border: 1px solid var(--agy-green);
+  color: #94c55f;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-weight: 700;
+}
+
+.app-badge-stopped {
+  font-size: 10px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color);
+  color: var(--text-dim);
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.app-info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+}
+
+.app-info-row .label { color: var(--text-dim); }
+.app-info-row .val { color: var(--text-main); font-family: var(--font-mono); }
+
+.app-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Modal for App Logs */
+.app-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.app-modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  width: 750px;
+  max-width: 90vw;
+  height: 520px;
+  background: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.modal-body {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  padding: 10px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-main);
+  white-space: pre-wrap;
+}

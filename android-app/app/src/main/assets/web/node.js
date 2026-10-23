@@ -152,6 +152,20 @@ async function pollStatus() {
       badgeWifi.textContent = `WI-FI: http://${net.ip}:${net.port || 8080}`;
     }
 
+    // Приложения
+    try {
+      const appsRes = await fetch('/api/apps', { cache: 'no-store' });
+      if (appsRes.ok) {
+        const appsData = await appsRes.json();
+        const apps = appsData.apps || [];
+        const running = apps.filter(a => a.running).length;
+        const valAppsCount = document.getElementById('valAppsCount');
+        if (valAppsCount) {
+          valAppsCount.textContent = `${running} активных (${apps.length} всего)`;
+        }
+      }
+    } catch (_) {}
+
   } catch (err) {
     isRunning = false;
     badgeDaemon.className = 'badge badge-offline';

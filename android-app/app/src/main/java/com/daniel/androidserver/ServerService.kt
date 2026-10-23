@@ -53,6 +53,8 @@ class ServerService : Service() {
 
         batteryMonitor = BatteryMonitor(this).apply { start() }
 
+        AppManager.init(this)
+
         httpServer = HttpServer(
             context = this,
             port = 8080,
