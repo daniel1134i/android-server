@@ -2,7 +2,7 @@
 <resources>
     <style name="Theme.AndroidServer" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/accent_antigravity</item>
-        <item name="colorPrimaryVariant">@color/accent_antigravity_purple</item>
+        <item name="colorPrimaryVariant">@color/accent_antigravity_amber</item>
         <item name="colorOnPrimary">@color/bg_main</item>
         <item name="android:windowBackground">@color/bg_main</item>
         <item name="android:statusBarColor">@color/bg_main</item>
