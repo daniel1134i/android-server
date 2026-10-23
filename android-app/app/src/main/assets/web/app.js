@@ -88,6 +88,9 @@ document.querySelectorAll('.nav-item').forEach(item => {
     if (item.dataset.tab === 'files') {
       loadFiles(currentPath);
     }
+    if (item.dataset.tab === 'logs') {
+      fetchRemoteLogs();
+    }
   });
 });
 
@@ -438,7 +441,109 @@ if (btnWakeRemote) {
   });
 }
 
+// Remote Logs Tab Logic
+const macLogOutput = document.getElementById('macLogOutput');
+const inputLogFilter = document.getElementById('inputLogFilter');
+const logsCounter = document.getElementById('logsCounter');
+const btnPauseLogs = document.getElementById('btnPauseLogs');
+const btnClearRemoteLogs = document.getElementById('btnClearRemoteLogs');
+const btnCopyLogs = document.getElementById('btnCopyLogs');
+
+let allRemoteLogs = [];
+let isLogsPaused = false;
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function fetchRemoteLogs() {
+  if (isLogsPaused) return;
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/logs`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    allRemoteLogs = data.logs || [];
+    renderRemoteLogs();
+  } catch (_) {}
+}
+
+function renderRemoteLogs() {
+  if (!macLogOutput) return;
+  const filterText = (inputLogFilter ? inputLogFilter.value : '').toLowerCase().trim();
+  const filtered = filterText ? allRemoteLogs.filter(e => {
+    return (e.message && e.message.toLowerCase().includes(filterText)) ||
+           (e.level && e.level.toLowerCase().includes(filterText));
+  }) : allRemoteLogs;
+
+  if (logsCounter) {
+    logsCounter.textContent = `${filtered.length} entries (total: ${allRemoteLogs.length})`;
+  }
+
+  if (filtered.length === 0) {
+    macLogOutput.innerHTML = `<div class="term-line term-system">No log entries recorded yet.</div>`;
+    return;
+  }
+
+  const isScrolledToBottom = macLogOutput.scrollHeight - macLogOutput.clientHeight <= macLogOutput.scrollTop + 50;
+
+  macLogOutput.innerHTML = filtered.map(e => {
+    const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '--:--:--';
+    const lvl = (e.level || 'INFO').toUpperCase();
+    let lvlClass = 'log-lvl-info';
+    if (lvl === 'WARN') lvlClass = 'log-lvl-warn';
+    else if (lvl === 'ERROR') lvlClass = 'log-lvl-err';
+    else if (lvl === 'SYSTEM') lvlClass = 'log-lvl-green';
+
+    return `<div class="log-entry">
+      <span class="log-time">[${timeStr}]</span>
+      <span class="log-lvl ${lvlClass}">${lvl}</span>
+      <span class="log-msg">${escapeHtml(e.message || '')}</span>
+    </div>`;
+  }).join('');
+
+  if (isScrolledToBottom) {
+    macLogOutput.scrollTop = macLogOutput.scrollHeight;
+  }
+}
+
+if (inputLogFilter) {
+  inputLogFilter.addEventListener('input', renderRemoteLogs);
+}
+
+if (btnPauseLogs) {
+  btnPauseLogs.addEventListener('click', () => {
+    isLogsPaused = !isLogsPaused;
+    btnPauseLogs.textContent = isLogsPaused ? 'RESUME STREAM' : 'PAUSE STREAM';
+    btnPauseLogs.style.background = isLogsPaused ? 'var(--agy-amber)' : '';
+  });
+}
+
+if (btnClearRemoteLogs) {
+  btnClearRemoteLogs.addEventListener('click', async () => {
+    try {
+      await fetch(`${getBaseUrl()}/api/logs/clear`);
+      allRemoteLogs = [];
+      renderRemoteLogs();
+    } catch (_) {}
+  });
+}
+
+if (btnCopyLogs) {
+  btnCopyLogs.addEventListener('click', () => {
+    const text = allRemoteLogs.map(e => `[${new Date(e.timestamp).toLocaleTimeString()}] [${e.level}] ${e.message}`).join('\n');
+    navigator.clipboard.writeText(text);
+    btnCopyLogs.textContent = 'COPIED!';
+    setTimeout(() => { btnCopyLogs.textContent = 'COPY ALL'; }, 2000);
+  });
+}
+
 // Start polling
 initAdb();
 triggerAdbForward().then(() => fetchTelemetry());
 pollInterval = setInterval(fetchTelemetry, 2500);
+setInterval(fetchRemoteLogs, 2000);

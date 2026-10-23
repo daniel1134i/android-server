@@ -19,6 +19,20 @@ class ServerService : Service() {
 
         var isRunning: Boolean = false
             private set
+
+        val logRing: MutableList<org.json.JSONObject> = java.util.Collections.synchronizedList(java.util.LinkedList())
+
+        fun addLog(msg: String, level: String = "INFO") {
+            val entry = org.json.JSONObject().apply {
+                put("timestamp", System.currentTimeMillis())
+                put("level", level)
+                put("message", msg)
+            }
+            logRing.add(entry)
+            while (logRing.size > 300) {
+                try { logRing.removeAt(0) } catch (_: Exception) {}
+            }
+        }
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -87,6 +101,7 @@ class ServerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun broadcastLog(msg: String) {
+        addLog(msg)
         val intent = Intent(ACTION_LOG).apply {
             putExtra(EXTRA_LOG_MSG, msg)
             setPackage(packageName)

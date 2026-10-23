@@ -25,6 +25,14 @@ class MainActivity : AppCompatActivity() {
             }
             return true
         }
+
+        @JavascriptInterface
+        fun toggleServer(): Boolean {
+            activity.runOnUiThread {
+                activity.toggleServer()
+            }
+            return ServerService.isRunning
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -50,14 +58,25 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                 view?.postDelayed({
-                    view.loadUrl("http://127.0.0.1:8080/")
+                    view.loadUrl("http://127.0.0.1:8080/node.html")
                 }, 500)
             }
         }
         webView.addJavascriptInterface(WebAppInterface(this), "androidAPI")
 
-        // Load dashboard directly from local autonomous server
-        webView.loadUrl("http://127.0.0.1:8080/")
+        // Load dedicated host node dashboard
+        webView.loadUrl("http://127.0.0.1:8080/node.html")
+    }
+
+    fun toggleServer() {
+        if (ServerService.isRunning) {
+            val serviceIntent = Intent(this, ServerService::class.java).apply {
+                action = ServerService.ACTION_STOP
+            }
+            startService(serviceIntent)
+        } else {
+            startServerService()
+        }
     }
 
     fun toggleDimScreen(): Boolean {

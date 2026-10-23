@@ -124,8 +124,31 @@ class HttpServer(
                         put("memory", SystemStats.getMemoryInfo(context))
                         put("storage", SystemStats.getStorageInfo())
                         put("device", SystemStats.getDeviceInfo())
+                        put("network", JSONObject().apply {
+                            put("ip", SystemStats.getIpAddress() ?: "127.0.0.1")
+                            put("port", port)
+                        })
                     }
                     sendJsonResponse(output, 200, resp)
+                }
+
+                uriPath == "/api/logs" -> {
+                    val arr = JSONArray()
+                    synchronized(ServerService.logRing) {
+                        ServerService.logRing.forEach { arr.put(it) }
+                    }
+                    val resp = JSONObject().apply {
+                        put("status", "ok")
+                        put("count", arr.length())
+                        put("logs", arr)
+                    }
+                    sendJsonResponse(output, 200, resp)
+                }
+
+                uriPath == "/api/logs/clear" -> {
+                    ServerService.logRing.clear()
+                    ServerService.addLog("Logs cleared by user", "SYSTEM")
+                    sendJsonResponse(output, 200, JSONObject().put("status", "ok"))
                 }
 
                 uriPath == "/api/exec" && method == "POST" -> {

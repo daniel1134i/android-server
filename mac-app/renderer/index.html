@@ -55,12 +55,16 @@
           <span class="nav-num">03</span>
           <span class="nav-label">FILES</span>
         </li>
-        <li class="nav-item" data-tab="power">
+        <li class="nav-item" data-tab="logs">
           <span class="nav-num">04</span>
+          <span class="nav-label">LOGS</span>
+        </li>
+        <li class="nav-item" data-tab="power">
+          <span class="nav-num">05</span>
           <span class="nav-label">POWER &amp; ECO</span>
         </li>
         <li class="nav-item" data-tab="settings">
-          <span class="nav-num">05</span>
+          <span class="nav-num">06</span>
           <span class="nav-label">CONNECTION</span>
         </li>
       </ul>
@@ -244,7 +248,33 @@
         </div>
       </section>
 
-      <!-- TAB 4: POWER & ECO -->
+      <!-- TAB 4: LOGS & AUDIT TRAIL -->
+      <section id="tab-logs" class="tab-pane">
+        <div class="pane-header flex-between">
+          <div>
+            <h2>[ SERVER EVENT &amp; ACCESS LOGS ]</h2>
+            <span class="header-desc">Real-time daemon traffic and audit trail from Android tablet</span>
+          </div>
+          <div class="quick-btns">
+            <button id="btnPauseLogs" class="btn-chip">PAUSE STREAM</button>
+            <button id="btnClearRemoteLogs" class="btn-chip">CLEAR</button>
+            <button id="btnCopyLogs" class="btn-chip">COPY ALL</button>
+          </div>
+        </div>
+
+        <div class="logs-filter-bar">
+          <input type="text" id="inputLogFilter" class="pixel-input" placeholder="Filter logs (e.g. GET, status, exec, error)..." />
+          <span class="logs-counter" id="logsCounter">0 entries</span>
+        </div>
+
+        <div class="logs-container">
+          <div class="terminal-body" id="macLogOutput">
+            <div class="term-line term-system">Connecting to remote server log stream...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: POWER & ECO -->
       <section id="tab-power" class="tab-pane">
         <div class="pane-header">
           <h2>[ 24/7 POWER &amp; BATTERY PROTECTION ]</h2>

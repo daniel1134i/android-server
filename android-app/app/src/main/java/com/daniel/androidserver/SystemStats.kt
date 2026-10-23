@@ -59,6 +59,23 @@ object SystemStats {
         }
     }
 
+    fun getIpAddress(): String? {
+        try {
+            val interfaces = java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
+            for (intf in interfaces) {
+                if (intf.name.contains("wlan") || intf.name.contains("eth") || intf.name.contains("rndis")) {
+                    val addrs = java.util.Collections.list(intf.inetAddresses)
+                    for (addr in addrs) {
+                        if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                            return addr.hostAddress
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return null
+    }
+
     fun getUptimeSeconds(): Long {
         return SystemClock.elapsedRealtime() / 1000
     }
