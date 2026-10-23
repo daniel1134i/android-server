@@ -157,6 +157,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTelemetry() {
+        val running = ServerService.isRunning
+        if (running) {
+            tvServerStatusBadge.text = "● RUNNING [ONLINE : 8080]"
+            tvServerStatusBadge.setTextColor(resources.getColor(R.color.status_green, theme))
+            btnToggleServer.text = "STOP SERVER"
+        } else {
+            tvServerStatusBadge.text = "○ STOPPED [OFFLINE]"
+            tvServerStatusBadge.setTextColor(resources.getColor(R.color.status_red, theme))
+            btnToggleServer.text = "START SERVER"
+        }
+
         val bat = batteryMonitor?.getInfo()
         if (bat != null) {
             val chargingIcon = if (bat.isCharging) "⚡" else "🔋"
