@@ -246,6 +246,9 @@ async function pollStatus() {
     const cloud = data.cloud || {};
     const valCloudId = document.getElementById('valCloudId');
     if (valCloudId && cloud.node_id) {
+      if (valCloudId.textContent && valCloudId.textContent !== cloud.node_id && valCloudId.textContent !== 'node_...') {
+        appendLogEntry(`⚡ [ЗАВОДСКОЙ СБРОС] Новые ключи ноды: ${cloud.node_id}`, 'СИСТЕМА');
+      }
       valCloudId.textContent = cloud.node_id;
       valCloudId.title = `Секретный ключ: ${cloud.secret_key || ''}\nСтатус: ${cloud.connected ? 'Подключено к релею' : 'Ожидание'}`;
       valCloudId.onclick = () => {
@@ -298,6 +301,12 @@ async function pollLogs() {
     if (!res.ok) return;
     const data = await res.json();
     const logs = data.logs || [];
+
+    if (logs.length < lastLogCount) {
+      // Буфер логов был сброшен на сервере! Очищаем экранный виджет
+      if (logStreamBox) logStreamBox.innerHTML = '';
+      lastLogCount = 0;
+    }
 
     if (logs.length > lastLogCount) {
       const newEntries = logs.slice(lastLogCount);

@@ -415,6 +415,18 @@ object AppManager {
         }
     }
 
+    fun resetAllApps() {
+        for ((name, _) in activeApps) {
+            try { stopApp(name) } catch (_: Exception) {}
+        }
+        activeApps.clear()
+        try {
+            appsDir.deleteRecursively()
+            appsDir.mkdirs()
+            createSampleAppIfEmpty()
+        } catch (_: Exception) {}
+    }
+
     private fun extractPid(process: Process): Long {
         return try {
             val field = process.javaClass.getDeclaredField("pid")

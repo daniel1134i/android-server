@@ -21,7 +21,7 @@ class HttpServer(
     private var serverSocket: ServerSocket? = null
     private val isRunning = AtomicBoolean(false)
     private val threadPool = Executors.newFixedThreadPool(4)
-    private val startTime = System.currentTimeMillis()
+    private var startTime = System.currentTimeMillis()
 
     fun start() {
         if (isRunning.get()) return
@@ -160,11 +160,14 @@ class HttpServer(
                         return
                     }
 
+                    AppManager.resetAllApps()
                     synchronized(ServerService.logRing) {
                         ServerService.logRing.clear()
                     }
+                    startTime = System.currentTimeMillis()
+                    SystemStats.serverStartTime = System.currentTimeMillis()
                     val newCreds = ServerService.cloudRelay?.resetCredentials()
-                    ServerService.addLog("[СБРОС] Хост-нода успешно сброшена к заводским настройкам", "SYSTEM")
+                    ServerService.addLog("[ЗАВОДСКОЙ СБРОС] Нода сброшена к заводским настройкам: приложения остановлены, буфер логов очищен", "SYSTEM")
 
                     val resp = JSONObject().apply {
                         put("status", "reset_ok")

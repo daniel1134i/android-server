@@ -296,11 +296,13 @@ class CloudRelayClient(
                 }
 
                 path == "/api/reset" -> {
+                    AppManager.resetAllApps()
                     synchronized(ServerService.logRing) {
                         ServerService.logRing.clear()
                     }
+                    SystemStats.serverStartTime = System.currentTimeMillis()
                     val newCreds = resetCredentials()
-                    ServerService.addLog("[СБРОС] Хост-нода успешно сброшена к заводским настройкам через Cloud RPC", "SYSTEM")
+                    ServerService.addLog("[ЗАВОДСКОЙ СБРОС] Нода сброшена к заводским настройкам через Cloud RPC: приложения остановлены, буфер логов очищен", "SYSTEM")
                     JSONObject().apply {
                         put("status", "reset_ok")
                         put("node_id", newCreds.first)

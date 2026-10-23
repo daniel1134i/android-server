@@ -377,21 +377,10 @@ async function fetchTelemetry() {
       }
     }
 
-    // Автоматическая привязка учетных данных Cloud Relay при первом локальном контакте
-    if (!isResetting && data.cloud && data.cloud.node_id) {
-      let changed = false;
-      if (!cloudNodeId) {
-        cloudNodeId = data.cloud.node_id;
-        if (typeof localStorage !== 'undefined') localStorage.setItem('cloud_node_id', cloudNodeId);
-        changed = true;
-      }
-      if (!cloudSecretKey && data.cloud.secret_key) {
-        cloudSecretKey = data.cloud.secret_key;
-        if (typeof localStorage !== 'undefined') localStorage.setItem('cloud_secret_key', cloudSecretKey);
-        changed = true;
-      }
+    // Синхронизация полей Cloud Relay только если устройство уже привязано
+    if (!isResetting && cloudNodeId && data.cloud && data.cloud.node_id === cloudNodeId) {
       syncCloudInputs();
-      if ((changed || !cloudIsReady) && !isResetting) {
+      if (!cloudIsReady) {
         initCloudRelay();
       }
     }
@@ -1072,7 +1061,7 @@ if (btnFactoryReset) {
       wifiHost = '';
       cloudNodeId = '';
       cloudSecretKey = '';
-      cloudRelayUrl = 'ws://192.168.0.199:8088';
+      cloudRelayUrl = 'ws://127.0.0.1:8088';
       serverPort = 8080;
       activeChannel = 'usb';
       isConnected = false;
@@ -1083,7 +1072,7 @@ if (btnFactoryReset) {
       if (inputPort) inputPort.value = '8080';
       if (inputCloudNodeId) inputCloudNodeId.value = '';
       if (inputCloudSecretKey) inputCloudSecretKey.value = '';
-      if (inputCloudRelayUrl) inputCloudRelayUrl.value = 'ws://192.168.0.199:8088';
+      if (inputCloudRelayUrl) inputCloudRelayUrl.value = 'ws://127.0.0.1:8088';
 
       // 7. Сбрасываем бейджи и баннеры в состояние первого запуска
       if (btnUnpair) btnUnpair.style.display = 'none';
