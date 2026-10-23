@@ -1,51 +1,149 @@
 # 👾 Android Autonomous Server & Mac Controller
 
-> Turn an Android tablet into a 24/7 low-power autonomous server, managed from macOS with a retro **Pixel Art × Claude Code** interface.
+<p align="center">
+  <img src="https://img.shields.io/badge/Android-15%20(HyperOS)-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 15" />
+  <img src="https://img.shields.io/badge/macOS-Controller%20App-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS Controller" />
+  <img src="https://img.shields.io/badge/Architecture-ARM64%20Octa--Core-FF6F00?style=for-the-badge&logo=arm&logoColor=white" alt="ARM64" />
+  <img src="https://img.shields.io/badge/Style-Pixel%20Art%20%C3%97%20Claude%20Code-4D82F1?style=for-the-badge" alt="Style" />
+  <img src="https://img.shields.io/badge/Cloud%20Relay-E2E%20Encrypted-83B368?style=for-the-badge&logo=wireguard&logoColor=white" alt="Cloud Relay" />
+  <img src="https://img.shields.io/badge/Status-24%2F7%20Autonomous-success?style=for-the-badge" alt="Status" />
+</p>
+
+> **Превратите Android-планшет в бесшумный, энергоэффективный круглосуточный микро-сервер (24/7)**, управляемый с экрана самого планшета или через настольное приложение macOS с эстетикой **Pixel Art × Claude Code UI**.
 
 ---
 
-## 🏗️ Architecture
+## 📚 Документация и руководства
+
+- 📖 **[Полное иллюстрированное руководство пользователя (MANUAL_RU.md)](./MANUAL_RU.md)** — пошаговая инструкция по настройке, автозапуску, удаленному доступу за 1000 км, защите батареи и деплою микросервисов.
+- 📦 **[Готовый файл AndroidServer.apk](./AndroidServer.apk)** — актуальная сборка для установки на планшет.
+- 💻 **[Настольное приложение для Mac (AndroidServerController.app)](/Applications/AndroidServerController.app)** — контроллер для macOS.
+
+---
+
+## 🏗️ Архитектура системы
 
 ```
-┌──────────────────────────────────────────────┐
-│         macOS Controller Desktop App         │
-│         (Claude Code & Pixel Aesthetic)      │
-│  - Real-time Hardware Telemetry (CPU/RAM/Bat)│
-│  - Remote Interactive Shell Console          │
-│  - Remote File Browser & Downloader          │
-│  - Power Management & Battery Preservation   │
-└──────────────────────┬───────────────────────┘
-                       │ HTTP/JSON RPC (port 8080)
-                       │ (Wi-Fi or USB via adb forward)
-┌──────────────────────▼───────────────────────┐
-│           Android Autonomous Server          │
-│   (Redmi Pad SE / Android 15 / 8-core CPU)   │
-│  - Foreground Service (Zero-sleep kill)      │
-│  - Partial WakeLock (Eco power mode)         │
-│  - Ultra-lightweight Multi-threaded HTTP     │
-│  - Battery Health & Thermal Protection       │
-│  - OLED Screen Dimmer (90% display power cut)│
-└──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                 macOS Controller Desktop App                │
+│         (Pixel Art × Claude Code UI / Dark Theme)           │
+│  - 01 ТЕЛЕМЕТРИЯ: Real-time CPU, RAM, Батарея, Температура  │
+│  - 02 ТЕРМИНАЛ: Удаленный shell c подсветкой и шорткатами   │
+│  - 03 ФАЙЛЫ: Файловый браузер и загрузчик с планшета        │
+│  - 04 ПРИЛОЖЕНИЯ: Деплой Git репозиториев и ZIP архивов     │
+│  - 05 ЛОГИ: Живой поток аудита и системных логов демона     │
+│  - 06 ПИТАНИЕ: Управление экраном и рекомендации 24/7       │
+│  - 07 ПОДКЛЮЧЕНИЕ: Мгновенное переключение Wi-Fi / USB / Cloud │
+└──────────────┬──────────────────────────────┬───────────────┘
+               │                              │
+     Локальный Wi-Fi / mDNS              Облачный Cloud Relay
+     или USB adb-forward                 (Шифрованный WebSocket
+     http://192.168.x.x:8080             туннель для доступа
+     http://127.0.0.1:8080               из любой точки мира)
+               │                              │
+               │                   ┌──────────▼──────────┐
+               │                   │  Cloud Relay Node   │
+               │                   │  (Multi-controller) │
+               │                   └──────────┬──────────┘
+               │                              │
+┌──────────────▼──────────────────────────────▼───────────────┐
+│               Android Autonomous Host Node                  │
+│       (Xiaomi Redmi Pad SE / 8 ядер / Android 15)           │
+│  - Foreground Service + Partial WakeLock (24/7 без сна)     │
+│  - Многопоточный HTTP-сервер на порту 8080                  │
+│  - Discovery Service (mDNS UDP на порту 8081)               │
+│  - Автозапуск при перезагрузке (BootReceiver)               │
+│  - Менеджер приложений AppManager (/sdcard/ServerApps/)     │
+│  - Сенсорный веб-интерфейс на самом планшете:               │
+│      [01 МОНИТОРИНГ] и [02 ПРИЛОЖЕНИЯ]                      │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ⚡ Energy Efficiency & 24/7 Longevity
+## ✨ Ключевые возможности
 
-1. **CPU & WakeLock Management:** The server daemon operates inside an Android `Foreground Service` holding an energy-optimized `PARTIAL_WAKE_LOCK`. The CPU remains responsive to incoming network requests while the screen and GPU are completely off.
-2. **OLED Dim Mode:** One-tap screen dimming sets brightness to 1% with an OLED-friendly dark clock, cutting display energy consumption by up to 95%.
-3. **Battery Longevity:** Telemetry monitors battery temperature in real time (alerts if > 42°C) and provides recommendations to keep charge between 20% and 80% to avoid battery swelling during continuous plugged-in operation.
+| Возможность | Описание |
+| :--- | :--- |
+| **Автономность 24/7** | Работает в режиме `Foreground Service` с низкоуровневым `PARTIAL_WAKE_LOCK`. Процессор и сетевой стек активны всегда, операционная система не усыпляет демон. |
+| **OLED ЭКО (Экономия 95%)** | Одно нажатие снижает яркость до 1 нит и заливает экран глубоким черным цветом, предотвращая выгорание и снижая энергопотребление дисплея практически до нуля. |
+| **Тройное резервирование связи** | Автоматическое переключение между **Wi-Fi** (локальная сеть), **USB-кабелем** (ADB forward) и **Cloud Relay** (удаленный доступ за тысячи километров). |
+| **Деплой микросервисов** | Развертывание проектов из публичных и приватных **Git-репозиториев** (GitHub / GitLab) или **ZIP-архивов** с автозапуском (`start.sh`, `main.py`, `node`). |
+| **Управление процессами** | Запуск, остановка, удаление и просмотр изолированных логов (`app.log`) с автоматической ротацией (до 3 МБ). |
+| **Защита батареи** | Анализ температуры в реальном времени (алерт при >42°C), рекомендации по эко-диапазону 20–80% и интеграция со смарт-розетками. |
+| **Интерфейс на планшете** | Планшет не требует внешних мониторов или ПК: встроенная панель управления позволяет переключаться между вкладками **«Мониторинг»** и **«Приложения»** прямо на сенсорном экране. |
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Быстрый старт
 
-### Android Server
-- Path: `android-app/`
-- Build APK: `./.tools/gradle-8.7/bin/gradle -p android-app assembleDebug`
-- APK location: `android-app/app/build/outputs/apk/debug/app-debug.apk`
+### 1. Установка сервера на планшет
+```bash
+# Подключите планшет по USB и установите APK:
+adb install -r AndroidServer.apk
 
-### macOS Controller
-- Path: `mac-app/`
-- Application installed at: `/Applications/AndroidServerController.app`
-- Launch via terminal: `open /Applications/AndroidServerController.app` or `cd mac-app && npm start`
+# Запустите сервер:
+adb shell am start -n com.daniel.androidserver/.MainActivity
+```
+- При первом запуске выдайте разрешение на **доступ ко всем файлам** и выберите **«Без ограничений»** в диалоге оптимизации батареи.
+
+### 2. Запуск Mac Controller
+Приложение уже установлено в систему:
+```bash
+# Запуск установленного приложения macOS:
+open /Applications/AndroidServerController.app
+
+# Или запуск из исходников:
+cd mac-app && npm start
+```
+
+### 3. Запуск Cloud Relay (для удаленного доступа из любой точки мира)
+```bash
+# Запуск релей-сервера:
+node cloud-relay/server.js
+```
+- Релей поднимет WebSocket на порту `8088`. Планшет подключится автоматически, а в приложении Mac Controller достаточно указать ваш **Node ID** и **Secret Key** из вкладки «Подключение».
+
+---
+
+## 🛠️ Стек технологий
+
+- **Android App:** Kotlin 2.0, AndroidX, Material Design 3, Coroutines, OkHttp3, Embedded WebView Client.
+- **Mac App:** Electron, Node.js, WebSocket Client, Custom Pixel-Art CSS System, JetBrains Mono & Silkscreen Typography.
+- **Cloud Relay:** Node.js, `ws` (RFC-6455), Zero-dependency JSON-RPC Router, Heartbeat Keep-Alive.
+- **Build System:** Gradle 8.7 (OpenJDK 17), Electron Packager.
+
+---
+
+## 📋 API Эндпоинты сервера
+
+| Метод | Путь | Описание |
+| :--- | :--- | :--- |
+| `GET` | `/api/status` | Полная телеметрия: статус демона, ОЗУ, накопитель, батарея, температура, аптайм, облачный ID |
+| `POST` | `/api/exec` | Выполнение удаленной консольной команды в Android shell (`stdout`, `stderr`, `exit_code`) |
+| `GET` | `/api/files?path=...` | Просмотр содержимого директорий файловой системы планшета |
+| `GET` | `/api/download?path=...` | Скачивание произвольного файла с планшета на компьютер |
+| `GET` | `/api/logs` | Журнал аудита входящих запросов и системных событий |
+| `POST` | `/api/logs/clear` | Очистка журнала аудита |
+| `GET` | `/api/apps` | Список установленных микросервисов в `/sdcard/ServerApps` |
+| `POST` | `/api/apps/deploy-git` | Загрузка и запуск репозитория по Git URL и токену |
+| `POST` | `/api/apps/deploy-zip` | Распаковка и запуск проекта из Base64 ZIP архива |
+| `POST` | `/api/apps/start` | Запуск остановленного приложения |
+| `POST` | `/api/apps/stop` | Остановка запущенного процесса |
+| `POST` | `/api/apps/delete` | Полное удаление директории приложения |
+| `GET` | `/api/apps/logs?name=...` | Просмотр файла `app.log` конкретного приложения |
+
+---
+
+## 🔒 Безопасность
+
+- **Изолированный Cloud Relay:** Доступ к вашей ноде защищен 256-битным токеном авторизации. Чужие пользователи релея не могут перехватить трафик или отправить команды на чужой сервер.
+- **Защита от Zip Slip:** Валидация канонических путей при распаковке архивов гарантирует, что файлы не выйдут за пределы песочницы приложения.
+- **Фильтрация команд:** Санитарная обработка имен папок и процессов исключает шелл-инъекции.
+
+---
+
+## 📄 Лицензия
+
+MIT License © 2026 Daniel.
+Разработано с акцентом на надежность, минимализм и максимальную энергоэффективность.
