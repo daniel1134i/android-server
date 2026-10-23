@@ -13,6 +13,7 @@ let serverPort = 8080;
 let activeChannel = 'usb'; // 'usb' | 'wifi' | 'cloud'
 let isConnected = false;
 let isResetting = false;
+let isUnpaired = (typeof localStorage !== 'undefined' ? localStorage.getItem('is_unpaired') === '1' : false);
 let currentPath = '/sdcard';
 let pollInterval = null;
 
@@ -272,7 +273,7 @@ function formatSeconds(sec) {
 
 // Опрос телеметрии с трехканальным отказоустойчивым переключением (USB <-> Wi-Fi <-> Cloud Relay)
 async function fetchTelemetry() {
-  if (isResetting) return;
+  if (isResetting || isUnpaired) return;
   const t0 = performance.now();
   let data = null;
   let channel = activeChannel;
@@ -669,6 +670,7 @@ async function triggerAutoPairing() {
   try {
     const res = await window.electronAPI.autoPairWifi();
     if (res && res.success) {
+      isUnpaired = false;
       wifiHost = res.ip;
       cloudNodeId = res.node_id;
       cloudSecretKey = res.secret_key;
@@ -676,6 +678,7 @@ async function triggerAutoPairing() {
       serverPort = res.port || 8080;
 
       if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('is_unpaired');
         localStorage.setItem('android_wifi_host', wifiHost);
         localStorage.setItem('cloud_node_id', cloudNodeId);
         localStorage.setItem('cloud_secret_key', cloudSecretKey);
@@ -695,6 +698,11 @@ async function triggerAutoPairing() {
       }
       activeChannel = 'cloud';
       initCloudRelay();
+
+      if (!pollInterval) {
+        pollInterval = setInterval(fetchTelemetry, 2500);
+      }
+      fetchTelemetry();
 
       const devName = (res.device && res.device.model) ? `${res.device.manufacturer || ''} ${res.device.model}` : 'Redmi Pad SE';
       if (txtAutoPairStatus) {
@@ -772,10 +780,18 @@ if (btnUnpair) {
 
     cloudNodeId = '';
     cloudSecretKey = '';
+    isUnpaired = true;
     if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('is_unpaired', '1');
       localStorage.removeItem('cloud_node_id');
       localStorage.removeItem('cloud_secret_key');
     }
+
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    updateConnectionUi(false);
 
     if (inputCloudNodeId) inputCloudNodeId.value = '';
     if (inputCloudSecretKey) inputCloudSecretKey.value = '';
@@ -831,6 +847,8 @@ btnAutoScan.addEventListener('click', async () => {
 btnSaveConnect.addEventListener('click', () => {
   const custom = inputHost.value.trim();
   serverPort = parseInt(inputPort.value, 10) || 8080;
+  isUnpaired = false;
+  if (typeof localStorage !== 'undefined') localStorage.removeItem('is_unpaired');
   if (custom === '127.0.0.1' || custom === 'localhost') {
     activeChannel = 'usb';
   } else {
@@ -838,29 +856,39 @@ btnSaveConnect.addEventListener('click', () => {
     wifiHost = custom;
     if (typeof localStorage !== 'undefined') localStorage.setItem('android_wifi_host', wifiHost);
   }
+  if (!pollInterval) pollInterval = setInterval(fetchTelemetry, 2500);
   fetchTelemetry();
 });
 
 presetUsb.addEventListener('click', async () => {
+  isUnpaired = false;
+  if (typeof localStorage !== 'undefined') localStorage.removeItem('is_unpaired');
   activeChannel = 'usb';
   inputHost.value = USB_HOST;
   inputPort.value = '8080';
   await triggerAdbForward();
+  if (!pollInterval) pollInterval = setInterval(fetchTelemetry, 2500);
   fetchTelemetry();
 });
 
 presetWifi.addEventListener('click', () => {
+  isUnpaired = false;
+  if (typeof localStorage !== 'undefined') localStorage.removeItem('is_unpaired');
   activeChannel = 'wifi';
   inputHost.value = wifiHost || '192.168.0.82';
   inputPort.value = '8080';
+  if (!pollInterval) pollInterval = setInterval(fetchTelemetry, 2500);
   fetchTelemetry();
 });
 
 const presetCloud = document.getElementById('presetCloud');
 if (presetCloud) {
   presetCloud.addEventListener('click', () => {
+    isUnpaired = false;
+    if (typeof localStorage !== 'undefined') localStorage.removeItem('is_unpaired');
     activeChannel = 'cloud';
     initCloudRelay();
+    if (!pollInterval) pollInterval = setInterval(fetchTelemetry, 2500);
     fetchTelemetry();
   });
 }
@@ -1058,17 +1086,21 @@ if (btnFactoryReset) {
       }
 
       // 5. Сбрасываем переменные состояния в памяти
+      isUnpaired = true;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('is_unpaired', '1');
+      }
       wifiHost = '';
       cloudNodeId = '';
       cloudSecretKey = '';
       cloudRelayUrl = 'ws://127.0.0.1:8088';
       serverPort = 8080;
-      activeChannel = 'usb';
+      activeChannel = 'none';
       isConnected = false;
       currentPath = '/sdcard';
 
       // 6. Очищаем поля формы
-      if (inputHost) inputHost.value = '127.0.0.1';
+      if (inputHost) inputHost.value = '';
       if (inputPort) inputPort.value = '8080';
       if (inputCloudNodeId) inputCloudNodeId.value = '';
       if (inputCloudSecretKey) inputCloudSecretKey.value = '';
@@ -1092,13 +1124,13 @@ if (btnFactoryReset) {
       if (txtCloudConnectStatus) txtCloudConnectStatus.textContent = '';
       if (connBadge) {
         connBadge.className = 'badge badge-offline';
-        connBadge.textContent = '○ СБРОШЕНО';
+        connBadge.textContent = '○ СБРОШЕНО (ОТВЯЗАНО)';
       }
       if (latencyBadge) latencyBadge.textContent = 'ПИНГ: --мс';
-      if (valActiveHost) valActiveHost.textContent = 'http://127.0.0.1:8080';
+      if (valActiveHost) valActiveHost.textContent = '--';
       if (valDaemonStatus) {
         valDaemonStatus.className = 'metric-val';
-        valDaemonStatus.textContent = 'Сброшено';
+        valDaemonStatus.textContent = 'Сброшено (Ожидает привязки)';
       }
 
       // 8. Сбрасываем метрики
@@ -1113,7 +1145,7 @@ if (btnFactoryReset) {
 
       if (txtFactoryResetStatus) {
         if (tabletResetConfirmed) {
-          txtFactoryResetStatus.textContent = `✓ Полный сброс выполнен! Планшет подтвердил сброс${newTabletNodeId ? ` (Новый ID: ${newTabletNodeId})` : ''}.`;
+          txtFactoryResetStatus.textContent = `✓ Полный сброс выполнен! Планшет и Mac отвязаны и сброшены. Для повторного подключения нажмите «⚡ 1-КЛИК АВТО-СВЯЗЫВАНИЕ».`;
           txtFactoryResetStatus.style.color = 'var(--agy-green)';
         } else {
           txtFactoryResetStatus.innerHTML = '⚠️ <b>Настройки Mac сброшены, но планшет не ответил!</b><br>Планшет не был на связи по проводу или сети. Подключите провод Type-C и нажмите кнопку еще раз, либо очистите данные в настройках планшета.';
@@ -1121,7 +1153,7 @@ if (btnFactoryReset) {
         }
         setTimeout(() => {
           if (txtFactoryResetStatus) txtFactoryResetStatus.textContent = '';
-        }, 10000);
+        }, 12000);
       }
     } catch (err) {
       if (txtFactoryResetStatus) {
@@ -1132,8 +1164,11 @@ if (btnFactoryReset) {
       isResetting = false;
       btnFactoryReset.disabled = false;
       btnFactoryReset.textContent = '⚠️ Сбросить к заводским';
-      // Перезапускаем опрос телеметрии в чистом состоянии
-      pollInterval = setInterval(fetchTelemetry, 2500);
+      // Опрос телеметрии НЕ перезапускаем автоматически — устройство сброшено!
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
     }
   });
 }
@@ -1230,7 +1265,7 @@ function escapeHtml(str) {
 }
 
 async function fetchRemoteLogs() {
-  if (isLogsPaused) return;
+  if (isLogsPaused || isUnpaired) return;
   try {
     const data = await apiCall('/api/logs');
     allRemoteLogs = (data && data.logs) ? data.logs : [];
@@ -1577,17 +1612,19 @@ if (btnModalRefreshLogs) {
 
 // Запуск опроса
 initAdb();
-triggerAdbForward().then(() => fetchTelemetry());
-pollInterval = setInterval(fetchTelemetry, 2500);
+if (!isUnpaired) {
+  triggerAdbForward().then(() => fetchTelemetry());
+  pollInterval = setInterval(fetchTelemetry, 2500);
+}
 setInterval(fetchRemoteLogs, 2000);
 
 // Автопоиск ноды в локальной сети по mDNS раз в 10 сек
 async function autoScanBonjour() {
-  if (isResetting) return;
+  if (isResetting || isUnpaired) return;
   try {
     if (window.electronAPI && typeof window.electronAPI.discoverBonjour === 'function') {
       const res = await window.electronAPI.discoverBonjour();
-      if (res && res.success && res.ip && res.ip !== '127.0.0.1' && !isResetting) {
+      if (res && res.success && res.ip && res.ip !== '127.0.0.1' && !isResetting && !isUnpaired) {
         if (wifiHost !== res.ip) {
           wifiHost = res.ip;
           if (typeof localStorage !== 'undefined') localStorage.setItem('android_wifi_host', wifiHost);
@@ -1601,7 +1638,7 @@ setInterval(autoScanBonjour, 10000);
 
 // Фоновая проверка восстановления USB-кабеля (если работаем по Wi-Fi или Облаку)
 async function checkUsbReconnection() {
-  if (isResetting || (activeChannel !== 'wifi' && activeChannel !== 'cloud')) return;
+  if (isResetting || isUnpaired || (activeChannel !== 'wifi' && activeChannel !== 'cloud')) return;
   try {
     if (window.electronAPI && typeof window.electronAPI.forwardAdb === 'function') {
       const fwd = await window.electronAPI.forwardAdb(serverPort);

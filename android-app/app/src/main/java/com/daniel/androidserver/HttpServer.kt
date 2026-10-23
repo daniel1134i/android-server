@@ -167,6 +167,7 @@ class HttpServer(
                     startTime = System.currentTimeMillis()
                     SystemStats.serverStartTime = System.currentTimeMillis()
                     val newCreds = ServerService.cloudRelay?.resetCredentials()
+                    ServerService.notifyFactoryReset(context)
                     ServerService.addLog("[ЗАВОДСКОЙ СБРОС] Нода сброшена к заводским настройкам: приложения остановлены, буфер логов очищен", "SYSTEM")
 
                     val resp = JSONObject().apply {

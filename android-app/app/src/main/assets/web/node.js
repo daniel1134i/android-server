@@ -248,6 +248,9 @@ async function pollStatus() {
     if (valCloudId && cloud.node_id) {
       if (valCloudId.textContent && valCloudId.textContent !== cloud.node_id && valCloudId.textContent !== 'node_...') {
         appendLogEntry(`⚡ [ЗАВОДСКОЙ СБРОС] Новые ключи ноды: ${cloud.node_id}`, 'СИСТЕМА');
+        showResetBanner();
+        if (logStreamBox) logStreamBox.innerHTML = '';
+        lastLogCount = 0;
       }
       valCloudId.textContent = cloud.node_id;
       valCloudId.title = `Секретный ключ: ${cloud.secret_key || ''}\nСтатус: ${cloud.connected ? 'Подключено к релею' : 'Ожидание'}`;
@@ -642,6 +645,59 @@ if (btnClearLogs) {
       await fetch('/api/logs/clear');
     } catch (_) {}
     appendLogEntry('Отображение логов очищено', 'СИСТЕМА');
+  });
+}
+
+const bannerResetAlert = document.getElementById('bannerResetAlert');
+const btnDismissResetBanner = document.getElementById('btnDismissResetBanner');
+const btnTabletReset = document.getElementById('btnTabletReset');
+
+function showResetBanner() {
+  if (bannerResetAlert) {
+    bannerResetAlert.classList.remove('hidden');
+    setTimeout(() => {
+      if (bannerResetAlert) bannerResetAlert.classList.add('hidden');
+    }, 12000);
+  }
+}
+
+if (btnDismissResetBanner) {
+  btnDismissResetBanner.addEventListener('click', () => {
+    if (bannerResetAlert) bannerResetAlert.classList.add('hidden');
+  });
+}
+
+if (window.location.search && window.location.search.includes('reset=1')) {
+  showResetBanner();
+  if (logStreamBox) logStreamBox.innerHTML = '';
+  lastLogCount = 0;
+  try { window.history.replaceState({}, document.title, window.location.pathname); } catch (_) {}
+}
+
+if (btnTabletReset) {
+  btnTabletReset.addEventListener('click', async () => {
+    const ok = confirm("⚠️ ВНИМАНИЕ: ПОЛНЫЙ СБРОС ХОСТ-СЕРВЕРА\n\n• Будут остановлены все запущенные Node.js/Python приложения\n• Буфер логов будет полностью очищен\n• Будут сгенерированы новые ID и Secret Key безопасности\n\nВыполнить сброс к заводским настройкам?");
+    if (!ok) return;
+
+    btnTabletReset.disabled = true;
+    btnTabletReset.textContent = '⏳ СБРОС...';
+    try {
+      const res = await fetch('/api/reset', { method: 'POST' });
+      if (res.ok) {
+        showResetBanner();
+        if (logStreamBox) logStreamBox.innerHTML = '';
+        lastLogCount = 0;
+        appendLogEntry('⚡ [ЗАВОДСКОЙ СБРОС] Хост-сервер успешно сброшен к заводским настройкам', 'СИСТЕМА');
+        pollStatus();
+      } else {
+        alert('Ошибка сброса: HTTP ' + res.status);
+      }
+    } catch (e) {
+      alert('Ошибка соединения при сбросе: ' + e.message);
+    } finally {
+      btnTabletReset.disabled = false;
+      btnTabletReset.innerHTML = '<span class="btn-icon">⚠️</span> СБРОС';
+    }
   });
 }
 

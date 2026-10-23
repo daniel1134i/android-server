@@ -1,8 +1,10 @@
 package com.daniel.androidserver
 
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -10,12 +12,24 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private var isDimmed = false
+
+    private val resetReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            runOnUiThread {
+                if (isDimmed) toggleDimScreen()
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                Toast.makeText(this@MainActivity, "⚡ Сервер сброшен к заводским настройкам!", Toast.LENGTH_LONG).show()
+                webView.loadUrl("http://127.0.0.1:8080/node.html?reset=1")
+            }
+        }
+    }
 
     class WebAppInterface(private val activity: MainActivity) {
         @JavascriptInterface
@@ -66,6 +80,20 @@ class MainActivity : AppCompatActivity() {
 
         // Load dedicated host node dashboard
         webView.loadUrl("http://127.0.0.1:8080/node.html")
+
+        val filter = IntentFilter(ServerService.ACTION_RESET)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(resetReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(resetReceiver, filter)
+        }
+    }
+
+    override fun onDestroy() {
+        try {
+            unregisterReceiver(resetReceiver)
+        } catch (_: Exception) {}
+        super.onDestroy()
     }
 
     fun toggleServer() {

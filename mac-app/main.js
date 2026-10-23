@@ -418,6 +418,12 @@ ipcMain.handle('pairing:factory-reset', async () => {
       });
       await targetSession.clearCache();
     }
+
+    // Удаляем все ADB forward туннели с Mac, чтобы предотвратить ложное переподключение
+    try {
+      exec('adb forward --remove-all', () => {});
+    } catch (_) {}
+
     return { success: true };
   } catch (err) {
     console.error('Factory reset session error in main:', err);

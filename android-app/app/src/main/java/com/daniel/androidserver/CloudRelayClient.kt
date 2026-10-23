@@ -305,6 +305,7 @@ class CloudRelayClient(
                     }
                     SystemStats.serverStartTime = System.currentTimeMillis()
                     val newCreds = resetCredentials()
+                    ServerService.notifyFactoryReset(context)
                     ServerService.addLog("[ЗАВОДСКОЙ СБРОС] Нода сброшена к заводским настройкам через Cloud RPC: приложения остановлены, буфер логов очищен", "SYSTEM")
                     JSONObject().apply {
                         put("status", "reset_ok")

@@ -16,6 +16,7 @@ class ServerService : Service() {
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP = "com.daniel.androidserver.ACTION_STOP"
         const val ACTION_LOG = "com.daniel.androidserver.ACTION_LOG"
+        const val ACTION_RESET = "com.daniel.androidserver.ACTION_RESET"
         const val EXTRA_LOG_MSG = "extra_log_msg"
 
         var isRunning: Boolean = false
@@ -25,6 +26,13 @@ class ServerService : Service() {
             private set
 
         val logRing: MutableList<org.json.JSONObject> = java.util.Collections.synchronizedList(java.util.LinkedList())
+
+        fun notifyFactoryReset(ctx: Context) {
+            val intent = Intent(ACTION_RESET).apply {
+                setPackage(ctx.packageName)
+            }
+            ctx.sendBroadcast(intent)
+        }
 
         fun addLog(msg: String, level: String = "INFO") {
             val entry = org.json.JSONObject().apply {
