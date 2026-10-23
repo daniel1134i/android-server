@@ -19,7 +19,7 @@ let pollInterval = null;
 // Настройки Cloud Relay (для доступа за 1000 км через интернет)
 let cloudNodeId = (typeof localStorage !== 'undefined' ? localStorage.getItem('cloud_node_id') : null) || '';
 let cloudSecretKey = (typeof localStorage !== 'undefined' ? localStorage.getItem('cloud_secret_key') : null) || '';
-let cloudRelayUrl = (typeof localStorage !== 'undefined' ? localStorage.getItem('cloud_relay_url') : null) || 'ws://192.168.0.199:8088';
+let cloudRelayUrl = (typeof localStorage !== 'undefined' ? localStorage.getItem('cloud_relay_url') : null) || 'ws://127.0.0.1:8088';
 let cloudWs = null;
 let cloudIsReady = false;
 let cloudReconnectTimer = null;
@@ -38,7 +38,11 @@ function initCloudRelay() {
   if (cloudWs && (cloudWs.readyState === WebSocket.OPEN || cloudWs.readyState === WebSocket.CONNECTING)) return;
 
   try {
-    cloudWs = new WebSocket(cloudRelayUrl);
+    const targetUrl = (cloudRelayUrl.includes('192.168.') || cloudRelayUrl.includes('localhost')) && cloudRelayUrl.includes(':8088')
+      ? 'ws://127.0.0.1:8088'
+      : cloudRelayUrl;
+
+    cloudWs = new WebSocket(targetUrl);
 
     cloudWs.onopen = () => {
       try {
@@ -320,18 +324,19 @@ async function fetchTelemetry() {
         data = await tryHost(wifiHost, 1500);
         channel = 'wifi';
       } catch (wifiErr) {
-        // Пробуем USB
-        try {
-          data = await tryHost(USB_HOST, 800);
-          activeChannel = 'usb';
-          channel = 'usb';
-        } catch (_) {}
-        // Пробуем Cloud Relay
-        if (!data && cloudIsReady) {
+        // Сначала пробуем Wi-Fi Relay (так как прямой Wi-Fi может блокироваться AP Isolation на роутере)
+        if (cloudIsReady) {
           try {
-            data = await sendCloudRpc('/api/status', 'GET', null, 3000);
-            activeChannel = 'cloud';
+            data = await sendCloudRpc('/api/status', 'GET', null, 2500);
             channel = 'cloud';
+          } catch (_) {}
+        }
+        // Если и Wi-Fi Relay недоступен — проверяем аварийный USB
+        if (!data) {
+          try {
+            data = await tryHost(USB_HOST, 800);
+            activeChannel = 'usb';
+            channel = 'usb';
           } catch (_) {}
         }
         if (!data) throw wifiErr;
@@ -407,10 +412,10 @@ function updateConnectionUi(online, latency = 0, channel = activeChannel) {
     } else if (channel === 'wifi') {
       connBadge.innerHTML = `● ОНЛАЙН <span style="color: var(--agy-blue-light); font-size: 10px; margin-left: 4px;">[📶 WI-FI]</span>`;
     } else if (channel === 'cloud') {
-      connBadge.innerHTML = `● ОНЛАЙН <span style="color: #a78bfa; font-size: 10px; margin-left: 4px;">[☁ ОБЛАКО]</span>`;
+      connBadge.innerHTML = `● ОНЛАЙН <span style="color: #a78bfa; font-size: 10px; margin-left: 4px;">[📶 WI-FI / RELAY]</span>`;
     }
     latencyBadge.textContent = `ПИНГ: ${latency}мс`;
-    const hostDesc = channel === 'usb' ? 'USB КАБЕЛЬ' : (channel === 'wifi' ? 'WI-FI ' + (wifiHost || '') : 'Cloud Relay: ' + (cloudNodeId || ''));
+    const hostDesc = channel === 'usb' ? 'USB КАБЕЛЬ' : (channel === 'wifi' ? 'WI-FI ' + (wifiHost || '') : 'WI-FI / RELAY (' + (cloudNodeId || '') + ')');
     valDaemonStatus.textContent = `Онлайн [${hostDesc}]`;
     valDaemonStatus.className = 'metric-val highlight-green';
     valActiveHost.textContent = channel === 'cloud' ? `cloud://${cloudNodeId}` : getBaseUrl();

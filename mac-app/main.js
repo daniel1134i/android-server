@@ -4,6 +4,7 @@ const { exec } = require('child_process');
 const dgram = require('dgram');
 const http = require('http');
 const os = require('os');
+const { startRelayServer } = require('./relay');
 
 // ========================================================
 // 🛡️ ГЛОБАЛЬНАЯ ЗАЩИТА ОТ КРАШЕЙ (MAIN PROCESS ERROR HANDLING)
@@ -59,6 +60,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  try {
+    startRelayServer(8088);
+  } catch (err) {
+    console.warn('[Relay AutoStart]', err);
+  }
+
   if (process.platform === 'darwin' && app.dock) {
     try { app.dock.setIcon(path.join(__dirname, 'icon.png')); } catch (_) {}
   }
@@ -315,7 +322,25 @@ ipcMain.handle('pairing:auto-pair', async () => {
     }
   } catch (_) {}
 
-  // Стратегия 2: Apple Bonjour / mDNS (нативный протокол macOS)
+  // Стратегия 2: Встроенный Wi-Fi / Cloud Relay (работает при любой изоляции клиентов на роутере)
+  try {
+    const relayPair = await probeHttpPair('127.0.0.1', 8088, 600);
+    if (relayPair && relayPair.status === 'paired') {
+      return {
+        success: true,
+        method: 'wifi_relay',
+        ip: '127.0.0.1',
+        port: 8088,
+        node_id: relayPair.node_id,
+        secret_key: relayPair.secret_key,
+        relay_url: relayPair.relay_url || 'ws://127.0.0.1:8088',
+        device: { model: 'Android Tablet (Wi-Fi Relay)', manufacturer: 'Xiaomi' },
+        paired_at: Date.now()
+      };
+    }
+  } catch (_) {}
+
+  // Стратегия 3: Apple Bonjour / mDNS (нативный протокол macOS)
   try {
     const bonjourRes = await discoverViaBonjourHelper();
     if (bonjourRes && bonjourRes.success && bonjourRes.ip) {
