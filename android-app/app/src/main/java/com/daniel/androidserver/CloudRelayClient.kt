@@ -25,8 +25,10 @@ class CloudRelayClient(
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    val nodeId: String
-    val secretKey: String
+    var nodeId: String
+        private set
+    var secretKey: String
+        private set
     var relayUrl: String
 
     private var okHttpClient: OkHttpClient? = null
@@ -82,6 +84,22 @@ class CloudRelayClient(
                 start()
             }
         }
+    }
+
+    fun resetCredentials(): Pair<String, String> {
+        val newNid = "node_" + UUID.randomUUID().toString().substring(0, 8)
+        val newKey = "sec_" + UUID.randomUUID().toString().replace("-", "")
+        prefs.edit()
+            .putString(KEY_NODE_ID, newNid)
+            .putString(KEY_SECRET_KEY, newKey)
+            .apply()
+        nodeId = newNid
+        secretKey = newKey
+        if (isRunning) {
+            stop()
+            start()
+        }
+        return Pair(newNid, newKey)
     }
 
     private fun connect() {

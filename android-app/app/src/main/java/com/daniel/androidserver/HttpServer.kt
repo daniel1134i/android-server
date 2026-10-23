@@ -154,6 +154,28 @@ class HttpServer(
                     sendJsonResponse(output, 200, resp)
                 }
 
+                uriPath == "/api/reset" && (method == "POST" || method == "GET") -> {
+                    if (!isLocalOrPrivateIp(socket.inetAddress)) {
+                        sendJsonResponse(output, 403, JSONObject().put("error", "Сброс разрешен только из локальной сети или по USB"))
+                        return
+                    }
+
+                    synchronized(ServerService.logRing) {
+                        ServerService.logRing.clear()
+                    }
+                    val newCreds = ServerService.cloudRelay?.resetCredentials()
+                    ServerService.addLog("[СБРОС] Хост-нода успешно сброшена к заводским настройкам", "SYSTEM")
+
+                    val resp = JSONObject().apply {
+                        put("status", "reset_ok")
+                        put("node_id", newCreds?.first ?: "")
+                        put("secret_key", newCreds?.second ?: "")
+                        put("message", "Хост-нода сброшена к заводским настройкам")
+                        put("timestamp", System.currentTimeMillis())
+                    }
+                    sendJsonResponse(output, 200, resp)
+                }
+
                 uriPath == "/api/cloud/config" && method == "POST" -> {
                     val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
                     val newUrl = reqJson.optString("relay_url", "").trim()
