@@ -1,38 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Android Autonomous Server Controller</title>
+  <title>Управление автономным сервером Android</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Window Drag Header -->
+  <!-- Шапка приложения с областью перетаскивания окна -->
   <header class="app-header">
     <div class="drag-region">
       <div class="brand">
-        <span class="brand-title"><span class="highlight">ANDROID</span> SERVER</span>
-        <span class="brand-tag">AUTO NODE</span>
+        <span class="brand-title"><span class="highlight">АНДРОИД</span> СЕРВЕР</span>
+        <span class="brand-tag">АВТО-НОДА</span>
       </div>
       <div class="status-cluster">
-        <div id="connBadge" class="badge badge-offline">● CONNECTING...</div>
-        <div id="latencyBadge" class="badge badge-dim">PING: --ms</div>
+        <div id="connBadge" class="badge badge-offline">● ПОДКЛЮЧЕНИЕ...</div>
+        <div id="latencyBadge" class="badge badge-dim">ПИНГ: --мс</div>
         <div id="batteryBadge" class="badge badge-dim">🔋 --%</div>
       </div>
     </div>
   </header>
 
   <div class="app-body">
-    <!-- Sidebar Navigation -->
+    <!-- Боковое меню -->
     <nav class="sidebar">
       <div class="device-mini-card">
         <div class="pixel-rack-art">
           <div class="rack-unit">
             <span class="led led-green" id="rackLed1"></span>
-            <span class="rack-text">TABLET-ARM64</span>
+            <span class="rack-text">ПЛАНШЕТ-ARM64</span>
             <span class="led led-cyan" id="rackLed2"></span>
           </div>
           <div class="rack-unit sub">
@@ -45,76 +45,76 @@
       <ul class="nav-menu">
         <li class="nav-item active" data-tab="telemetry">
           <span class="nav-num">01</span>
-          <span class="nav-label">TELEMETRY</span>
+          <span class="nav-label">ТЕЛЕМЕТРИЯ</span>
         </li>
         <li class="nav-item" data-tab="terminal">
           <span class="nav-num">02</span>
-          <span class="nav-label">TERMINAL</span>
+          <span class="nav-label">ТЕРМИНАЛ</span>
         </li>
         <li class="nav-item" data-tab="files">
           <span class="nav-num">03</span>
-          <span class="nav-label">FILES</span>
+          <span class="nav-label">ФАЙЛЫ</span>
         </li>
         <li class="nav-item" data-tab="logs">
           <span class="nav-num">04</span>
-          <span class="nav-label">LOGS</span>
+          <span class="nav-label">ЛОГИ</span>
         </li>
         <li class="nav-item" data-tab="power">
           <span class="nav-num">05</span>
-          <span class="nav-label">POWER &amp; ECO</span>
+          <span class="nav-label">ПИТАНИЕ И ЭКО</span>
         </li>
         <li class="nav-item" data-tab="settings">
           <span class="nav-num">06</span>
-          <span class="nav-label">CONNECTION</span>
+          <span class="nav-label">ПОДКЛЮЧЕНИЕ</span>
         </li>
       </ul>
 
       <div class="sidebar-footer">
         <button id="btnAdbTunnel" class="btn-pixel-secondary">
-          ⚡ USB ADB TUNNEL
+          ⚡ USB ADB ТУННЕЛЬ
         </button>
-        <div class="version-label">v1.0.0 :: 24/7 AUTONOMOUS</div>
+        <div class="version-label">v1.0.0 :: АВТОНОМНЫЙ 24/7</div>
       </div>
     </nav>
 
-    <!-- Main Content Area -->
+    <!-- Основная область содержимого -->
     <main class="content-viewport">
 
-      <!-- TAB 1: TELEMETRY -->
+      <!-- ВКЛАДКА 1: ТЕЛЕМЕТРИЯ -->
       <section id="tab-telemetry" class="tab-pane active">
         <div class="pane-header">
-          <h2>[ SYSTEM TELEMETRY ]</h2>
-          <span class="header-desc">Real-time hardware &amp; server state</span>
+          <h2>[ СИСТЕМНАЯ ТЕЛЕМЕТРИЯ ]</h2>
+          <span class="header-desc">Состояние аппаратной части и сервера в реальном времени</span>
         </div>
 
         <div class="cards-grid">
-          <!-- Server Status Card -->
+          <!-- Карточка состояния сервера -->
           <div class="pixel-card">
-            <div class="card-title">SERVER STATE</div>
+            <div class="card-title">СОСТОЯНИЕ СЕРВЕРА</div>
             <div class="metric-row">
-              <span class="metric-label">Daemon:</span>
-              <span class="metric-val highlight-green" id="valDaemonStatus">Online</span>
+              <span class="metric-label">Демон:</span>
+              <span class="metric-val highlight-green" id="valDaemonStatus">Онлайн</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Uptime:</span>
-              <span class="metric-val" id="valUptime">0h 0m 0s</span>
+              <span class="metric-label">Аптайм демона:</span>
+              <span class="metric-val" id="valUptime">0ч 0м 0с</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Device Uptime:</span>
+              <span class="metric-label">Аптайм системы:</span>
               <span class="metric-val" id="valSysUptime">--</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Active Host:</span>
+              <span class="metric-label">Активный хост:</span>
               <span class="metric-val code-text" id="valActiveHost">http://127.0.0.1:8080</span>
             </div>
           </div>
 
-          <!-- Battery & Thermal Card -->
+          <!-- Карточка батареи и температуры -->
           <div class="pixel-card">
-            <div class="card-title">BATTERY &amp; THERMAL</div>
+            <div class="card-title">БАТАРЕЯ И ТЕМПЕРАТУРА</div>
             <div class="battery-bar-container">
               <div class="bar-label">
-                <span>CHARGE LEVEL</span>
+                <span>УРОВЕНЬ ЗАРЯДА</span>
                 <span id="valBatteryPercent" class="metric-val">--%</span>
               </div>
               <div class="pixel-progress-bar">
@@ -122,39 +122,39 @@
               </div>
             </div>
             <div class="metric-row" style="margin-top: 12px;">
-              <span class="metric-label">Temperature:</span>
+              <span class="metric-label">Температура:</span>
               <span class="metric-val" id="valBatteryTemp">--°C</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Power Source:</span>
+              <span class="metric-label">Источник питания:</span>
               <span class="metric-val" id="valBatteryPlugged">--</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Battery Health:</span>
-              <span class="metric-val" id="valBatteryHealth">Good</span>
+              <span class="metric-label">Здоровье батареи:</span>
+              <span class="metric-val" id="valBatteryHealth">Отличное</span>
             </div>
             <div id="thermalAlert" class="alert-box-pixel hidden">
-              ⚠️ WARNING: Battery above 40°C! Consider cooling.
+              ⚠️ ВНИМАНИЕ: Температура выше 40°C! Требуется охлаждение.
             </div>
           </div>
 
-          <!-- Memory & Storage Card -->
+          <!-- Карточка ОЗУ и диска -->
           <div class="pixel-card">
-            <div class="card-title">MEMORY (RAM)</div>
+            <div class="card-title">ОПЕРАТИВНАЯ ПАМЯТЬ (ОЗУ)</div>
             <div class="battery-bar-container">
               <div class="bar-label">
-                <span>USAGE</span>
-                <span id="valRamText" class="metric-val">-- / -- GB (--%)</span>
+                <span>ИСПОЛЬЗОВАНИЕ</span>
+                <span id="valRamText" class="metric-val">-- / -- ГБ (--%)</span>
               </div>
               <div class="pixel-progress-bar">
                 <div id="barRamFill" class="progress-fill fill-ram" style="width: 0%"></div>
               </div>
             </div>
-            <div class="card-title" style="margin-top: 16px;">STORAGE (/SDCARD)</div>
+            <div class="card-title" style="margin-top: 16px;">НАКОПИТЕЛЬ (/SDCARD)</div>
             <div class="battery-bar-container">
               <div class="bar-label">
-                <span>INTERNAL DISK</span>
-                <span id="valDiskText" class="metric-val">-- / -- GB</span>
+                <span>ВНУТРЕННИЙ ДИСК</span>
+                <span id="valDiskText" class="metric-val">-- / -- ГБ</span>
               </div>
               <div class="pixel-progress-bar">
                 <div id="barDiskFill" class="progress-fill fill-disk" style="width: 0%"></div>
@@ -162,35 +162,35 @@
             </div>
           </div>
 
-          <!-- Device Hardware Card -->
+          <!-- Карточка устройства -->
           <div class="pixel-card">
-            <div class="card-title">HARDWARE IDENTITY</div>
+            <div class="card-title">СПЕЦИФИКАЦИЯ УСТРОЙСТВА</div>
             <div class="metric-row">
-              <span class="metric-label">Model:</span>
+              <span class="metric-label">Модель:</span>
               <span class="metric-val" id="valDeviceModel">--</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Android OS:</span>
+              <span class="metric-label">Версия Android:</span>
               <span class="metric-val" id="valDeviceOs">--</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">CPU Cores:</span>
-              <span class="metric-val" id="valDeviceCores">-- Cores</span>
+              <span class="metric-label">Ядра процессора:</span>
+              <span class="metric-val" id="valDeviceCores">-- ядер</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Architecture:</span>
+              <span class="metric-label">Архитектура:</span>
               <span class="metric-val code-text" id="valDeviceArch">--</span>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- TAB 2: TERMINAL -->
+      <!-- ВКЛАДКА 2: ТЕРМИНАЛ -->
       <section id="tab-terminal" class="tab-pane">
         <div class="pane-header flex-between">
           <div>
-            <h2>[ REMOTE SHELL // AUTO NODE ]</h2>
-            <span class="header-desc">Direct execution on Android tablet shell</span>
+            <h2>[ УДАЛЕННЫЙ ШЕЛЛ // АВТО-НОДА ]</h2>
+            <span class="header-desc">Прямое выполнение команд в командной строке планшета</span>
           </div>
           <div class="quick-btns">
             <button class="btn-chip" data-cmd="uname -a">uname</button>
@@ -203,28 +203,28 @@
 
         <div class="terminal-container">
           <div class="terminal-body" id="termOutput">
-            <div class="term-line term-system">Welcome to Android Server Remote Console [Autonomous Node]</div>
-            <div class="term-line term-system">Connected to remote node over HTTP/JSON RPC. Type commands below.</div>
+            <div class="term-line term-system">Добро пожаловать в удаленную консоль Android Server [Автономная Нода]</div>
+            <div class="term-line term-system">Подключение к удаленной ноде через HTTP/JSON RPC. Введите команду ниже:</div>
           </div>
           <div class="terminal-input-bar">
             <span class="prompt-prefix">android-node:$</span>
-            <input type="text" id="termInput" placeholder="Enter shell command (e.g. ls -la /sdcard)..." autocomplete="off" spellcheck="false" />
-            <button id="btnSendCmd" class="btn-pixel">RUN [↵]</button>
+            <input type="text" id="termInput" placeholder="Введите команду оболочки (напр. ls -la /sdcard)..." autocomplete="off" spellcheck="false" />
+            <button id="btnSendCmd" class="btn-pixel">ВЫПОЛНИТЬ [↵]</button>
           </div>
         </div>
       </section>
 
-      <!-- TAB 3: FILES -->
+      <!-- ВКЛАДКА 3: ФАЙЛЫ -->
       <section id="tab-files" class="tab-pane">
         <div class="pane-header flex-between">
           <div>
-            <h2>[ FILE BROWSER ]</h2>
-            <span class="header-desc">Remote filesystem access on tablet</span>
+            <h2>[ ФАЙЛОВЫЙ БРАУЗЕР ]</h2>
+            <span class="header-desc">Удаленный доступ к файловой системе планшета</span>
           </div>
           <div class="path-nav">
             <span id="currentDirPath" class="code-text">/sdcard</span>
-            <button id="btnNavUp" class="btn-pixel-secondary">▲ UP</button>
-            <button id="btnRefreshFiles" class="btn-pixel-secondary">↻ REFRESH</button>
+            <button id="btnNavUp" class="btn-pixel-secondary">▲ НАВЕРХ</button>
+            <button id="btnRefreshFiles" class="btn-pixel-secondary">↻ ОБНОВИТЬ</button>
           </div>
         </div>
 
@@ -232,118 +232,118 @@
           <table class="file-table">
             <thead>
               <tr>
-                <th>TYPE</th>
-                <th>NAME</th>
-                <th>SIZE</th>
-                <th>MODIFIED</th>
-                <th>ACTION</th>
+                <th>ТИП</th>
+                <th>ИМЯ</th>
+                <th>РАЗМЕР</th>
+                <th>ИЗМЕНЕН</th>
+                <th>ДЕЙСТВИЕ</th>
               </tr>
             </thead>
             <tbody id="fileTableBody">
               <tr>
-                <td colspan="5" class="text-center">Loading files from tablet...</td>
+                <td colspan="5" class="text-center">Загрузка файлов с планшета...</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <!-- TAB 4: LOGS & AUDIT TRAIL -->
+      <!-- ВКЛАДКА 4: ЛОГИ И АУДИТ -->
       <section id="tab-logs" class="tab-pane">
         <div class="pane-header flex-between">
           <div>
-            <h2>[ SERVER EVENT &amp; ACCESS LOGS ]</h2>
-            <span class="header-desc">Real-time daemon traffic and audit trail from Android tablet</span>
+            <h2>[ ЖУРНАЛ СОБЫТИЙ И ТРАФИКА СЕРВЕРА ]</h2>
+            <span class="header-desc">Поток сетевых запросов и аудит-трейл демона с планшета</span>
           </div>
           <div class="quick-btns">
-            <button id="btnPauseLogs" class="btn-chip">PAUSE STREAM</button>
-            <button id="btnClearRemoteLogs" class="btn-chip">CLEAR</button>
-            <button id="btnCopyLogs" class="btn-chip">COPY ALL</button>
+            <button id="btnPauseLogs" class="btn-chip">ПАУЗА ПОТОКА</button>
+            <button id="btnClearRemoteLogs" class="btn-chip">ОЧИСТИТЬ</button>
+            <button id="btnCopyLogs" class="btn-chip">КОПИРОВАТЬ ВСЁ</button>
           </div>
         </div>
 
         <div class="logs-filter-bar">
-          <input type="text" id="inputLogFilter" class="pixel-input" placeholder="Filter logs (e.g. GET, status, exec, error)..." />
-          <span class="logs-counter" id="logsCounter">0 entries</span>
+          <input type="text" id="inputLogFilter" class="pixel-input" placeholder="Фильтр логов (напр. GET, status, exec, error)..." />
+          <span class="logs-counter" id="logsCounter">0 записей</span>
         </div>
 
         <div class="logs-container">
           <div class="terminal-body" id="macLogOutput">
-            <div class="term-line term-system">Connecting to remote server log stream...</div>
+            <div class="term-line term-system">Подключение к потоку логов сервера...</div>
           </div>
         </div>
       </section>
 
-      <!-- TAB 5: POWER & ECO -->
+      <!-- ВКЛАДКА 5: ПИТАНИЕ И ЭКОЛОГИЯ -->
       <section id="tab-power" class="tab-pane">
         <div class="pane-header">
-          <h2>[ 24/7 POWER &amp; BATTERY PROTECTION ]</h2>
-          <span class="header-desc">Longevity guidelines and battery swelling prevention</span>
+          <h2>[ КРУГЛОСУТОЧНОЕ ПИТАНИЕ И ЗАЩИТА БАТАРЕИ ]</h2>
+          <span class="header-desc">Рекомендации по долговечности и предотвращению вздутия аккумулятора</span>
         </div>
 
         <div class="cards-grid">
           <div class="pixel-card">
-            <div class="card-title">SMART BATTERY PRESERVATION</div>
+            <div class="card-title">УМНОЕ СОХРАНЕНИЕ АККУМУЛЯТОРА</div>
             <p class="eco-p">
-              Keeping a tablet plugged into a charger 24/7 at 100% causes lithium battery degradation and swelling within 6-12 months.
+              Круглосуточное нахождение планшета на зарядке при 100% вызывает ускоренную деградацию лития и риск вздутия батареи.
             </p>
             <div class="eco-rule">
               <span class="pixel-check">✔</span>
-              <span><strong>Optimal Range:</strong> Keep battery between <strong>20% and 80%</strong>.</span>
+              <span><strong>Оптимальный диапазон:</strong> держите заряд между <strong>20% и 80%</strong>.</span>
             </div>
             <div class="eco-rule">
               <span class="pixel-check">✔</span>
-              <span><strong>Smart Plug Webhook:</strong> Use Home Assistant or Tuya smart plug to cut power at 80% and resume at 25%.</span>
+              <span><strong>Умная розетка:</strong> настройте сценарий в Home Assistant или Tuya (отключение при 80%, включение при 25%).</span>
             </div>
             <div class="eco-rule">
               <span class="pixel-check">✔</span>
-              <span><strong>Screen Burn-in Protection:</strong> Use the OLED Dim feature on the tablet to cut display draw by 95%.</span>
+              <span><strong>Защита от выгорания экрана:</strong> используйте режим OLED Эко на планшете (снижает энергопотребление на 95%).</span>
             </div>
           </div>
 
           <div class="pixel-card">
-            <div class="card-title">REMOTE SCREEN ACTIONS</div>
+            <div class="card-title">УДАЛЕННОЕ УПРАВЛЕНИЕ ЭКРАНОМ</div>
             <p class="eco-p">
-              Trigger display state on tablet remotely to conserve power without interrupting server processes:
+              Управление состоянием дисплея планшета по сети без прерывания фоновых процессов сервера:
             </p>
             <div class="action-btn-row">
-              <button id="btnDimRemote" class="btn-pixel-secondary">DIM TABLET SCREEN</button>
-              <button id="btnWakeRemote" class="btn-pixel-secondary">WAKE TABLET SCREEN</button>
+              <button id="btnDimRemote" class="btn-pixel-secondary">ПРИГЛУШИТЬ ЭКРАН</button>
+              <button id="btnWakeRemote" class="btn-pixel-secondary">РАЗБУДИТЬ ЭКРАН</button>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- TAB 5: CONNECTION SETTINGS -->
+      <!-- ВКЛАДКА 6: НАСТРОЙКИ ПОДКЛЮЧЕНИЯ -->
       <section id="tab-settings" class="tab-pane">
         <div class="pane-header">
-          <h2>[ CONNECTION CONFIGURATION ]</h2>
-          <span class="header-desc">Switch between Wi-Fi and USB Cable tunnel</span>
+          <h2>[ НАСТРОЙКА ПОДКЛЮЧЕНИЯ ]</h2>
+          <span class="header-desc">Переключение между кабельным туннелем USB и сетью Wi-Fi</span>
         </div>
 
         <div class="pixel-card max-w-600">
-          <div class="card-title">TARGET NODE ADDRESS</div>
+          <div class="card-title">АДРЕС ЦЕЛЕВОЙ НОДЫ</div>
           <div class="form-group">
-            <label>Server IP / Host:</label>
+            <label>IP / Хост сервера:</label>
             <div class="input-with-button">
-              <input type="text" id="inputHost" value="127.0.0.1" placeholder="192.168.0.82 or 127.0.0.1" />
+              <input type="text" id="inputHost" value="127.0.0.1" placeholder="192.168.0.82 или 127.0.0.1" />
               <input type="number" id="inputPort" value="8080" style="width: 100px;" />
             </div>
           </div>
 
           <div class="quick-preset-row">
-            <span>PRESETS:</span>
+            <span>ПРЕСЕТЫ:</span>
             <button class="btn-chip" id="presetUsb">USB ADB (127.0.0.1:8080)</button>
-            <button class="btn-chip" id="presetWifi">Tablet Wi-Fi (192.168.0.82:8080)</button>
-            <button class="btn-chip" id="btnAutoScan" style="border-color: var(--anti-accent); color: var(--anti-accent);">🔍 AUTO-DISCOVER (MDNS)</button>
+            <button class="btn-chip" id="presetWifi">Wi-Fi планшета (192.168.0.82:8080)</button>
+            <button class="btn-chip" id="btnAutoScan" style="border-color: var(--anti-accent); color: var(--anti-accent);">🔍 АВТО-ПОИСК (MDNS)</button>
           </div>
 
           <div class="form-group" style="margin-top: 18px;">
-            <button id="btnSaveConnect" class="btn-pixel">SAVE &amp; RECONNECT</button>
+            <button id="btnSaveConnect" class="btn-pixel">СОХРАНИТЬ И ПОДКЛЮЧИТЬСЯ</button>
           </div>
 
-          <div class="card-title" style="margin-top: 24px;">ADB STATUS</div>
-          <pre id="adbOutput" class="adb-box">Checking ADB devices...</pre>
+          <div class="card-title" style="margin-top: 24px;">СТАТУС ADB</div>
+          <pre id="adbOutput" class="adb-box">Проверка устройств ADB...</pre>
         </div>
       </section>
 

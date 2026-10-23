@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Android Server</string>
-    <string name="server_running">Server Running</string>
-    <string name="server_stopped">Server Stopped</string>
-    <string name="channel_name">Android Server Service</string>
-    <string name="channel_desc">Background daemon for Android Server</string>
+    <string name="app_name">Сервер Android</string>
+    <string name="server_running">Сервер запущен</string>
+    <string name="server_stopped">Сервер остановлен</string>
+    <string name="channel_name">Служба сервера Android</string>
+    <string name="channel_desc">Фоновый демон сервера Android</string>
 </resources>

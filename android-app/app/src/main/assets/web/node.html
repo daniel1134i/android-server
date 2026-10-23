@@ -1,38 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Android Server Node Dashboard</title>
+  <title>Сервер Android - Панель управления нодой</title>
   <link rel="stylesheet" href="node.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Header -->
+  <!-- Шапка -->
   <header class="node-header">
     <div class="brand">
-      <span class="brand-title"><span class="highlight">ANDROID</span> SERVER</span>
-      <span class="brand-tag">HOST NODE 01</span>
-      <span class="brand-sub">AUTONOMOUS MICRO-SERVER APPLIANCE</span>
+      <span class="brand-title"><span class="highlight">АНДРОИД</span> СЕРВЕР</span>
+      <span class="brand-tag">ХОСТ-НОДА 01</span>
+      <span class="brand-sub">АВТОНОМНЫЙ МИКРО-СЕРВЕР</span>
     </div>
     <div class="header-badges">
-      <div id="badgeDaemon" class="badge badge-online">● DAEMON: ONLINE</div>
-      <div id="badgeWifi" class="badge badge-dim">WIFI: http://--:8080</div>
+      <div id="badgeDaemon" class="badge badge-online">● ДЕМОН: ОНЛАЙН</div>
+      <div id="badgeWifi" class="badge badge-dim">WI-FI: http://--:8080</div>
       <div id="badgeBattery" class="badge badge-dim">🔋 --%</div>
     </div>
   </header>
 
   <main class="node-main">
-    <!-- Top Row: Master Status & Quick Node Controls -->
+    <!-- Верхний блок: Статус и управление нодой -->
     <section class="master-card">
       <div class="master-left">
         <div class="status-indicator-box">
           <span class="pulse-led" id="pulseLed"></span>
           <div>
-            <div class="status-headline" id="txtDaemonTitle">DAEMON ACTIVE &amp; LISTENING</div>
-            <div class="status-sub" id="txtDaemonSub">Accepting HTTP/JSON RPC requests on port 8080 &amp; mDNS discovery on 8081</div>
+            <div class="status-headline" id="txtDaemonTitle">ДЕМОН АКТИВЕН И СЛУШАЕТ ПОРТ</div>
+            <div class="status-sub" id="txtDaemonSub">Прием запросов HTTP/JSON RPC на порту 8080 и mDNS на порту 8081</div>
           </div>
         </div>
         <div class="endpoint-badges">
@@ -41,11 +41,11 @@
             <span class="ep-value" id="valWifiUrl">http://...:8080</span>
           </div>
           <div class="ep-chip">
-            <span class="ep-label">USB / LOOPBACK</span>
+            <span class="ep-label">USB / ЛОКАЛЬНО</span>
             <span class="ep-value">http://127.0.0.1:8080</span>
           </div>
           <div class="ep-chip">
-            <span class="ep-label">SERVICE</span>
+            <span class="ep-label">СЕРВИС</span>
             <span class="ep-value">_android-server._tcp</span>
           </div>
         </div>
@@ -53,24 +53,24 @@
 
       <div class="master-actions">
         <button id="btnDimScreen" class="btn-node btn-dim">
-          <span class="btn-icon">🌙</span> OLED ECO DIM (95% POWER SAVE)
+          <span class="btn-icon">🌙</span> OLED ЭКО (ЭКОНОМИЯ 95%)
         </button>
         <button id="btnToggleDaemon" class="btn-node btn-toggle">
-          <span class="btn-icon">⏻</span> STOP DAEMON
+          <span class="btn-icon">⏻</span> ОСТАНОВИТЬ ДЕМОН
         </button>
         <div class="pill-status">
-          <span class="pill-dot"></span> WAKELOCK: PARTIAL (ACTIVE 24/7)
+          <span class="pill-dot"></span> WAKELOCK: ЧАСТИЧНЫЙ (АКТИВЕН 24/7)
         </div>
       </div>
     </section>
 
-    <!-- Middle Row: 3 Hardware Telemetry Cards -->
+    <!-- Средний блок: 3 карточки телеметрии -->
     <section class="telemetry-grid">
-      <!-- Battery Card -->
+      <!-- Батарея -->
       <div class="node-card">
         <div class="card-head">
-          <span class="card-title">BATTERY &amp; THERMAL</span>
-          <span class="badge-mini" id="valBatStatus">CHARGING</span>
+          <span class="card-title">БАТАРЕЯ И ТЕМПЕРАТУРА</span>
+          <span class="badge-mini" id="valBatStatus">ЗАРЯДКА</span>
         </div>
         <div class="metric-hero">
           <span class="hero-num" id="valBatPct">--%</span>
@@ -81,94 +81,94 @@
         </div>
         <div class="card-kv-grid">
           <div class="kv-item">
-            <span class="k">Power Source</span>
+            <span class="k">Источник питания</span>
             <span class="v" id="valBatSource">--</span>
           </div>
           <div class="kv-item">
-            <span class="k">Battery Health</span>
-            <span class="v highlight-green" id="valBatHealth">Good</span>
+            <span class="k">Здоровье батареи</span>
+            <span class="v highlight-green" id="valBatHealth">Отличное</span>
           </div>
           <div class="kv-item">
-            <span class="k">Preservation</span>
-            <span class="v highlight-amber">20% - 80% Eco Range</span>
+            <span class="k">Сохранение ресурса</span>
+            <span class="v highlight-amber">Эко-диапазон 20% - 80%</span>
           </div>
         </div>
       </div>
 
-      <!-- Memory & CPU Card -->
+      <!-- Оперативная память и процессор -->
       <div class="node-card">
         <div class="card-head">
-          <span class="card-title">MEMORY &amp; PERFORMANCE</span>
+          <span class="card-title">ОЗУ И ПРОИЗВОДИТЕЛЬНОСТЬ</span>
           <span class="badge-mini" id="valRamPct">--%</span>
         </div>
         <div class="metric-hero">
           <span class="hero-num" id="valRamUsed">--</span>
-          <span class="hero-unit">/ <span id="valRamTotal">--</span> GB RAM</span>
+          <span class="hero-unit">/ <span id="valRamTotal">--</span> ГБ ОЗУ</span>
         </div>
         <div class="progress-bar">
           <div class="progress-fill fill-amber" id="barRam"></div>
         </div>
         <div class="card-kv-grid">
           <div class="kv-item">
-            <span class="k">Processor</span>
-            <span class="v" id="valCpuCores">8 Cores</span>
+            <span class="k">Процессор</span>
+            <span class="v" id="valCpuCores">8 ядер</span>
           </div>
           <div class="kv-item">
-            <span class="k">Architecture</span>
+            <span class="k">Архитектура</span>
             <span class="v" id="valCpuArch">arm64-v8a</span>
           </div>
           <div class="kv-item">
-            <span class="k">Doze Whitelist</span>
-            <span class="v highlight-green">Unrestricted (Active)</span>
+            <span class="k">Белый список Doze</span>
+            <span class="v highlight-green">Без ограничений (Активен)</span>
           </div>
         </div>
       </div>
 
-      <!-- Storage & Uptime Card -->
+      <!-- Накопитель и время работы -->
       <div class="node-card">
         <div class="card-head">
-          <span class="card-title">STORAGE &amp; UPTIME</span>
+          <span class="card-title">НАКОПИТЕЛЬ И АПТАЙМ</span>
           <span class="badge-mini" id="valDiskPct">--%</span>
         </div>
         <div class="metric-hero">
           <span class="hero-num" id="valDiskUsed">--</span>
-          <span class="hero-unit">/ <span id="valDiskTotal">--</span> GB DISK</span>
+          <span class="hero-unit">/ <span id="valDiskTotal">--</span> ГБ ДИСК</span>
         </div>
         <div class="progress-bar">
           <div class="progress-fill fill-blue" id="barDisk"></div>
         </div>
         <div class="card-kv-grid">
           <div class="kv-item">
-            <span class="k">Daemon Uptime</span>
-            <span class="v highlight-green" id="valDaemonUptime">0h 0m 0s</span>
+            <span class="k">Аптайм демона</span>
+            <span class="v highlight-green" id="valDaemonUptime">0ч 0м 0с</span>
           </div>
           <div class="kv-item">
-            <span class="k">System Uptime</span>
+            <span class="k">Аптайм системы</span>
             <span class="v" id="valSysUptime">--</span>
           </div>
           <div class="kv-item">
-            <span class="k">Device Model</span>
+            <span class="k">Модель устройства</span>
             <span class="v" id="valDeviceModel">Redmi Pad SE</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Bottom Row: Real-time Access & Daemon Activity Stream -->
+    <!-- Нижний блок: Журнал аудита в реальном времени -->
     <section class="activity-card">
       <div class="activity-head">
         <div class="act-title-cluster">
           <span class="terminal-prompt">&gt;_</span>
-          <span class="act-title">REAL-TIME ACCESS &amp; DAEMON AUDIT STREAM</span>
-          <span class="badge-stream" id="badgeStream">LIVE</span>
+          <span class="act-title">ЖУРНАЛ СОБЫТИЙ И АУДИТ В РЕАЛЬНОМ ВРЕМЕНИ</span>
+          <span class="badge-stream" id="badgeStream">В ЭФИРЕ</span>
         </div>
         <div class="act-buttons">
-          <button id="btnClearLogs" class="btn-sub">CLEAR LOGS</button>
+          <button id="btnClearLogs" class="btn-sub">ОЧИСТИТЬ ЛОГИ</button>
         </div>
       </div>
       <div class="log-stream-box" id="logStreamBox">
-        <div class="log-row sys">[SYSTEM] Android Server Node host dashboard initialized</div>
-        <div class="log-row sys">[DAEMON] Listening on 0.0.0.0:8080 (HTTP) &amp; 0.0.0.0:8081 (Discovery)</div>
+        <div class="log-row sys">[СИСТЕМА] Панель управления хост-нодой инициализирована</div>
+        <div class="log-row sys">[ДЕМОН] Прослушивание 0.0.0.0:8080 (HTTP) и 0.0.0.0:8081 (Discovery)</div>
       </div>
     </section>
   </main>

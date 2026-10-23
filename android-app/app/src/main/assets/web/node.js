@@ -2,7 +2,7 @@ let isDimmed = false;
 let isRunning = true;
 let lastLogCount = 0;
 
-// DOM Elements
+// DOM Элементы
 const badgeDaemon = document.getElementById('badgeDaemon');
 const badgeWifi = document.getElementById('badgeWifi');
 const badgeBattery = document.getElementById('badgeBattery');
@@ -39,28 +39,28 @@ const valDeviceModel = document.getElementById('valDeviceModel');
 
 const logStreamBox = document.getElementById('logStreamBox');
 
-// Helpers
+// Форматирование времени
 function formatSeconds(sec) {
   if (!sec && sec !== 0) return '--';
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = Math.floor(sec % 60);
-  return `${h}h ${m}m ${s}s`;
+  return `${h}ч ${m}м ${s}с`;
 }
 
-function appendLogEntry(msg, level = 'INFO', timestamp = null) {
+function appendLogEntry(msg, level = 'ИНФО', timestamp = null) {
   const row = document.createElement('div');
   row.className = 'log-row';
 
-  const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+  const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString('ru-RU') : new Date().toLocaleTimeString('ru-RU');
   
   if (msg.includes('GET') || msg.includes('POST')) {
     row.classList.add('http');
-  } else if (msg.toLowerCase().includes('error') || msg.toLowerCase().includes('fail')) {
+  } else if (msg.toLowerCase().includes('error') || msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('ошибка')) {
     row.classList.add('err');
-  } else if (msg.toLowerCase().includes('warn') || msg.toLowerCase().includes('battery')) {
+  } else if (msg.toLowerCase().includes('warn') || msg.toLowerCase().includes('battery') || msg.toLowerCase().includes('батаре')) {
     row.classList.add('warn');
-  } else if (msg.toLowerCase().includes('started') || msg.toLowerCase().includes('online')) {
+  } else if (msg.toLowerCase().includes('started') || msg.toLowerCase().includes('online') || msg.toLowerCase().includes('запущен')) {
     row.classList.add('green');
   } else {
     row.classList.add('sys');
@@ -76,37 +76,48 @@ function appendLogEntry(msg, level = 'INFO', timestamp = null) {
   logStreamBox.scrollTop = logStreamBox.scrollHeight;
 }
 
-// Fetch Status
+// Опрос статуса сервера
 async function pollStatus() {
   try {
     const res = await fetch('/api/status', { cache: 'no-store' });
-    if (!res.ok) throw new Error('Offline');
+    if (!res.ok) throw new Error('Оффлайн');
     const data = await res.json();
 
-    // Daemon Online
+    // Демон активен
     isRunning = true;
     badgeDaemon.className = 'badge badge-online';
-    badgeDaemon.textContent = '● DAEMON: ONLINE';
+    badgeDaemon.textContent = '● ДЕМОН: ОНЛАЙН';
     pulseLed.style.background = 'var(--agy-green)';
     pulseLed.style.boxShadow = '0 0 10px var(--agy-green)';
-    txtDaemonTitle.textContent = 'DAEMON ACTIVE & LISTENING';
+    txtDaemonTitle.textContent = 'ДЕМОН АКТИВЕН И СЛУШАЕТ ПОРТ';
     txtDaemonTitle.style.color = '#94c55f';
-    txtDaemonSub.textContent = 'Accepting HTTP/JSON RPC requests on port 8080 & mDNS discovery on 8081';
+    txtDaemonSub.textContent = 'Прием запросов HTTP/JSON RPC на порту 8080 и mDNS на порту 8081';
     btnToggleDaemon.className = 'btn-node btn-toggle';
-    btnToggleDaemon.innerHTML = '<span class="btn-icon">⏻</span> STOP DAEMON';
+    btnToggleDaemon.innerHTML = '<span class="btn-icon">⏻</span> ОСТАНОВИТЬ ДЕМОН';
 
-    // Battery
+    // Батарея
     const bat = data.battery || {};
     const batPct = bat.percent || 0;
     valBatPct.textContent = `${batPct}%`;
     valBatTemp.textContent = `${bat.temp_c || 0}°C`;
     barBat.style.width = `${batPct}%`;
-    valBatStatus.textContent = (bat.status || 'CHARGING').toUpperCase();
-    valBatSource.textContent = bat.plugged || 'AC Wall Charger';
-    valBatHealth.textContent = bat.health || 'Good';
+    
+    let statusRu = 'ЗАРЯДКА';
+    if (bat.status === 'Discharging') statusRu = 'РАЗРЯДКА';
+    else if (bat.status === 'Full') statusRu = 'ЗАРЯЖЕНО';
+    else if (bat.status === 'Not charging') statusRu = 'НЕ ЗАРЯЖАЕТСЯ';
+    valBatStatus.textContent = statusRu;
+
+    let sourceRu = 'Сетевой адаптер (AC)';
+    if (bat.plugged === 'USB') sourceRu = 'Порт USB';
+    else if (bat.plugged === 'Wireless') sourceRu = 'Беспроводная';
+    else if (bat.plugged === 'Battery') sourceRu = 'От аккумулятора';
+    valBatSource.textContent = sourceRu;
+
+    valBatHealth.textContent = bat.health === 'Good' ? 'Отличное' : (bat.health || 'В норме');
     badgeBattery.textContent = `🔋 ${batPct}%`;
 
-    // RAM
+    // ОЗУ
     const mem = data.memory || {};
     const memUsedGb = ((mem.used_mb || 0) / 1024).toFixed(1);
     const memTotalGb = ((mem.total_mb || 0) / 1024).toFixed(1);
@@ -116,7 +127,7 @@ async function pollStatus() {
     valRamTotal.textContent = memTotalGb;
     barRam.style.width = `${memPct}%`;
 
-    // Storage
+    // Диск
     const st = data.storage || {};
     const diskUsedGb = ((st.used_mb || 0) / 1024).toFixed(1);
     const diskTotalGb = ((st.total_mb || 0) / 1024).toFixed(1);
@@ -126,36 +137,36 @@ async function pollStatus() {
     valDiskTotal.textContent = diskTotalGb;
     barDisk.style.width = `${diskPct}%`;
 
-    // Device & Uptime
+    // Устройство и аптайм
     const dev = data.device || {};
-    valCpuCores.textContent = `${dev.cores || 8} Cores`;
+    valCpuCores.textContent = `${dev.cores || 8} ядер`;
     valCpuArch.textContent = dev.arch || 'arm64-v8a';
     valDeviceModel.textContent = dev.model || 'Redmi Pad SE';
     valDaemonUptime.textContent = formatSeconds(data.uptime_s);
     valSysUptime.textContent = formatSeconds(data.system_uptime_s);
 
-    // Network IP
+    // Сетевой IP
     const net = data.network || {};
     if (net.ip && net.ip !== '127.0.0.1') {
       valWifiUrl.textContent = `http://${net.ip}:${net.port || 8080}`;
-      badgeWifi.textContent = `WIFI: http://${net.ip}:${net.port || 8080}`;
+      badgeWifi.textContent = `WI-FI: http://${net.ip}:${net.port || 8080}`;
     }
 
   } catch (err) {
     isRunning = false;
     badgeDaemon.className = 'badge badge-offline';
-    badgeDaemon.textContent = '○ DAEMON: STOPPED';
+    badgeDaemon.textContent = '○ ДЕМОН: ОСТАНОВЛЕН';
     pulseLed.style.background = 'var(--agy-coral)';
     pulseLed.style.boxShadow = '0 0 10px var(--agy-coral)';
-    txtDaemonTitle.textContent = 'DAEMON PAUSED / STOPPED';
+    txtDaemonTitle.textContent = 'ДЕМОН ОСТАНОВЛЕН / НА ПАУЗЕ';
     txtDaemonTitle.style.color = 'var(--agy-coral)';
-    txtDaemonSub.textContent = 'Server service stopped. Press START DAEMON to resume.';
+    txtDaemonSub.textContent = 'Служба сервера остановлена. Нажмите ЗАПУСТИТЬ ДЕМОН для возобновления.';
     btnToggleDaemon.className = 'btn-node btn-toggle is-stopped';
-    btnToggleDaemon.innerHTML = '<span class="btn-icon">▶</span> START DAEMON';
+    btnToggleDaemon.innerHTML = '<span class="btn-icon">▶</span> ЗАПУСТИТЬ ДЕМОН';
   }
 }
 
-// Fetch Logs
+// Получение логов
 async function pollLogs() {
   try {
     const res = await fetch('/api/logs', { cache: 'no-store' });
@@ -171,34 +182,15 @@ async function pollLogs() {
   } catch (_) {}
 }
 
-// Network info detection
-async function detectLocalIp() {
-  try {
-    const res = await fetch('/api/exec', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: "ip -o -4 addr show | grep -v '127.0.0.1' | awk '{print $4}' | cut -d/ -f1 | head -n 1" })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const ip = (data.stdout || '').trim();
-      if (ip) {
-        valWifiUrl.textContent = `http://${ip}:8080`;
-        badgeWifi.textContent = `WIFI: http://${ip}:8080`;
-      }
-    }
-  } catch (_) {}
-}
-
-// Buttons
+// Кнопки управления
 btnDimScreen.addEventListener('click', () => {
   if (window.androidAPI && typeof window.androidAPI.toggleDim === 'function') {
     isDimmed = !isDimmed;
     window.androidAPI.toggleDim();
     btnDimScreen.innerHTML = isDimmed ? 
-      '<span class="btn-icon">💡</span> RESTORE BRIGHTNESS' : 
-      '<span class="btn-icon">🌙</span> OLED ECO DIM (95% POWER SAVE)';
-    appendLogEntry(`Screen brightness ${isDimmed ? 'dimmed to minimal' : 'restored'}`, 'POWER');
+      '<span class="btn-icon">💡</span> ВЕРНУТЬ ЯРКОСТЬ' : 
+      '<span class="btn-icon">🌙</span> OLED ЭКО (ЭКОНОМИЯ 95%)';
+    appendLogEntry(`Яркость экрана ${isDimmed ? 'приглушена до минимума' : 'восстановлена'}`, 'ПИТАНИЕ');
   }
 });
 
@@ -215,13 +207,12 @@ btnClearLogs.addEventListener('click', async () => {
   try {
     await fetch('/api/logs/clear');
   } catch (_) {}
-  appendLogEntry('Log display cleared', 'SYSTEM');
+  appendLogEntry('Отображение логов очищено', 'СИСТЕМА');
 });
 
-// Initialization
+// Инициализация
 pollStatus();
 pollLogs();
-detectLocalIp();
 
 setInterval(pollStatus, 2500);
 setInterval(pollLogs, 1500);

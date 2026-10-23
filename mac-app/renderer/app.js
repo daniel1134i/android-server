@@ -9,11 +9,11 @@ if (typeof window !== 'undefined' && window.location && window.location.protocol
   serverPort = window.location.port ? parseInt(window.location.port, 10) : 8080;
 }
 
-// Android & Standalone browser fallback
+// Заглушка для автономного браузера или Android
 if (!window.electronAPI) {
   window.electronAPI = {
-    forwardAdb: async () => ({ success: true, output: 'Local loopback active (127.0.0.1:8080)' }),
-    checkAdbDevices: async () => ({ success: true, output: 'Local Tablet Android Server Node' }),
+    forwardAdb: async () => ({ success: true, output: 'Локальный loopback активен (127.0.0.1:8080)' }),
+    checkAdbDevices: async () => ({ success: true, output: 'Локальная нода сервера Android' }),
     discoverBonjour: async () => ({ success: true, ip: serverHost, port: serverPort }),
     openExternal: (url) => { window.open(url, '_blank'); }
   };
@@ -34,7 +34,7 @@ const getBaseUrl = () => {
   return `http://${serverHost}:${serverPort}`;
 };
 
-// DOM Elements
+// DOM Элементы
 const connBadge = document.getElementById('connBadge');
 const latencyBadge = document.getElementById('latencyBadge');
 const batteryBadge = document.getElementById('batteryBadge');
@@ -76,7 +76,7 @@ const presetUsb = document.getElementById('presetUsb');
 const presetWifi = document.getElementById('presetWifi');
 const btnAutoScan = document.getElementById('btnAutoScan');
 
-// Navigation Tabs
+// Переключение вкладок
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
@@ -94,16 +94,16 @@ document.querySelectorAll('.nav-item').forEach(item => {
   });
 });
 
-// Helper: Format seconds to H:M:S
+// Форматирование времени
 function formatSeconds(sec) {
   if (!sec && sec !== 0) return '--';
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = Math.floor(sec % 60);
-  return `${h}h ${m}m ${s}s`;
+  return `${h}ч ${m}м ${s}с`;
 }
 
-// Telemetry Poller
+// Опрос телеметрии
 async function fetchTelemetry() {
   const t0 = performance.now();
   try {
@@ -124,16 +124,16 @@ function updateConnectionUi(online, latency = 0) {
   isConnected = online;
   if (online) {
     connBadge.className = 'badge badge-online';
-    connBadge.textContent = '● ONLINE';
-    latencyBadge.textContent = `PING: ${latency}ms`;
-    valDaemonStatus.textContent = 'Online [Active]';
+    connBadge.textContent = '● ОНЛАЙН';
+    latencyBadge.textContent = `ПИНГ: ${latency}мс`;
+    valDaemonStatus.textContent = 'Онлайн [Активен]';
     valDaemonStatus.className = 'metric-val highlight-green';
     valActiveHost.textContent = getBaseUrl();
   } else {
     connBadge.className = 'badge badge-offline';
-    connBadge.textContent = '○ OFFLINE';
-    latencyBadge.textContent = 'PING: --ms';
-    valDaemonStatus.textContent = 'Offline';
+    connBadge.textContent = '○ ОФФЛАЙН';
+    latencyBadge.textContent = 'ПИНГ: --мс';
+    valDaemonStatus.textContent = 'Оффлайн [Недоступен]';
     valDaemonStatus.className = 'metric-val';
   }
 }
@@ -142,15 +142,25 @@ function renderTelemetry(data) {
   valUptime.textContent = formatSeconds(data.uptime_s);
   valSysUptime.textContent = formatSeconds(data.system_uptime_s);
 
-  // Battery
+  // Батарея
   const bat = data.battery || {};
   valBatteryPercent.textContent = `${bat.percent || 0}%`;
   barBatteryFill.style.width = `${bat.percent || 0}%`;
   batteryBadge.textContent = `🔋 ${bat.percent || 0}%`;
-
   valBatteryTemp.textContent = `${bat.temp_c || 0}°C`;
-  valBatteryPlugged.textContent = `${bat.plugged || '--'} (${bat.status || '--'})`;
-  valBatteryHealth.textContent = bat.health || 'Good';
+
+  let statusRu = 'Зарядка';
+  if (bat.status === 'Discharging') statusRu = 'Разрядка';
+  else if (bat.status === 'Full') statusRu = 'Заряжено';
+  else if (bat.status === 'Not charging') statusRu = 'Не заряжается';
+
+  let sourceRu = 'Сетевой адаптер (AC)';
+  if (bat.plugged === 'USB') sourceRu = 'Порт USB';
+  else if (bat.plugged === 'Wireless') sourceRu = 'Беспроводная';
+  else if (bat.plugged === 'Battery') sourceRu = 'От аккумулятора';
+
+  valBatteryPlugged.textContent = `${sourceRu} (${statusRu})`;
+  valBatteryHealth.textContent = bat.health === 'Good' ? 'Отличное' : (bat.health || 'В норме');
 
   if (bat.overheating) {
     thermalAlert.classList.remove('hidden');
@@ -158,37 +168,36 @@ function renderTelemetry(data) {
     thermalAlert.classList.add('hidden');
   }
 
-  // Memory
+  // ОЗУ
   const mem = data.memory || {};
   const totalMemGb = ((mem.total_mb || 0) / 1024).toFixed(1);
   const usedMemGb = ((mem.used_mb || 0) / 1024).toFixed(1);
   const memPct = mem.used_percent || 0;
-  valRamText.textContent = `${usedMemGb} / ${totalMemGb} GB (${memPct}%)`;
+  valRamText.textContent = `${usedMemGb} / ${totalMemGb} ГБ (${memPct}%)`;
   barRamFill.style.width = `${memPct}%`;
 
-  // Storage
+  // Накопитель
   const stor = data.storage || {};
   const totalDiskGb = ((stor.total_mb || 0) / 1024).toFixed(1);
   const usedDiskGb = ((stor.used_mb || 0) / 1024).toFixed(1);
   const diskPct = stor.used_percent || 0;
-  valDiskText.textContent = `${usedDiskGb} / ${totalDiskGb} GB (${diskPct}%)`;
+  valDiskText.textContent = `${usedDiskGb} / ${totalDiskGb} ГБ (${diskPct}%)`;
   barDiskFill.style.width = `${diskPct}%`;
 
-  // Hardware
+  // Спецификация
   const dev = data.device || {};
   valDeviceModel.textContent = `${dev.manufacturer || ''} ${dev.model || ''}`;
-  rackModelText.textContent = dev.model || 'Android Tablet';
+  rackModelText.textContent = dev.model || 'Redmi Pad SE';
   valDeviceOs.textContent = `Android ${dev.android_version || ''} (API ${dev.sdk_int || ''})`;
-  valDeviceCores.textContent = `${dev.cores || 8} Cores`;
+  valDeviceCores.textContent = `${dev.cores || 8} ядер`;
   valDeviceArch.textContent = dev.arch || 'arm64';
 }
 
-// Terminal execution
+// Выполнение в терминале
 async function runCommand(cmd) {
   if (!cmd || !cmd.trim()) return;
   const command = cmd.trim();
 
-  // Print command
   const cmdLine = document.createElement('div');
   cmdLine.className = 'term-line term-cmd';
   cmdLine.textContent = `$ ${command}`;
@@ -219,13 +228,13 @@ async function runCommand(cmd) {
     if (result.exit_code !== 0 && !result.stderr) {
       const codeLine = document.createElement('div');
       codeLine.className = 'term-line term-stderr';
-      codeLine.textContent = `[Process exited with code ${result.exit_code}]`;
+      codeLine.textContent = `[Процесс завершился с кодом ${result.exit_code}]`;
       termOutput.appendChild(codeLine);
     }
   } catch (err) {
     const failLine = document.createElement('div');
     failLine.className = 'term-line term-stderr';
-    failLine.textContent = `Execution error: ${err.message}`;
+    failLine.textContent = `Ошибка выполнения: ${err.message}`;
     termOutput.appendChild(failLine);
   }
 
@@ -244,17 +253,17 @@ termInput.addEventListener('keydown', (e) => {
   }
 });
 
-// Quick action chips
+// Быстрые кнопки команд
 document.querySelectorAll('.btn-chip[data-cmd]').forEach(chip => {
   chip.addEventListener('click', () => {
     runCommand(chip.dataset.cmd);
   });
 });
 
-// File Manager
+// Файловый браузер
 async function loadFiles(path) {
   currentDirPath.textContent = path;
-  fileTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
+  fileTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Загрузка...</td></tr>';
 
   try {
     const res = await fetch(`${getBaseUrl()}/api/files?path=${encodeURIComponent(path)}`);
@@ -269,7 +278,7 @@ async function loadFiles(path) {
     currentDirPath.textContent = currentPath;
 
     if (!data.items || data.items.length === 0) {
-      fileTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Directory is empty</td></tr>';
+      fileTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Папка пуста</td></tr>';
       return;
     }
 
@@ -279,9 +288,9 @@ async function loadFiles(path) {
       tr.className = 'file-row';
 
       const typeIcon = item.is_dir ? '📁' : '📄';
-      const typeLabel = item.is_dir ? 'DIR' : 'FILE';
+      const typeLabel = item.is_dir ? 'ПАПКА' : 'ФАЙЛ';
       const sizeLabel = item.is_dir ? '--' : formatFileSize(item.size);
-      const modDate = new Date(item.last_modified).toLocaleString();
+      const modDate = new Date(item.last_modified).toLocaleString('ru-RU');
 
       tr.innerHTML = `
         <td><span class="file-icon">${typeIcon}</span> ${typeLabel}</td>
@@ -295,7 +304,7 @@ async function loadFiles(path) {
       if (item.is_dir) {
         const openBtn = document.createElement('button');
         openBtn.className = 'btn-chip';
-        openBtn.textContent = 'OPEN';
+        openBtn.textContent = 'ОТКРЫТЬ';
         openBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           loadFiles(item.path);
@@ -304,7 +313,7 @@ async function loadFiles(path) {
       } else {
         const dlBtn = document.createElement('button');
         dlBtn.className = 'btn-chip';
-        dlBtn.textContent = 'DOWNLOAD';
+        dlBtn.textContent = 'СКАЧАТЬ';
         dlBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           window.electronAPI.openExternal(`${getBaseUrl()}/api/download?path=${encodeURIComponent(item.path)}`);
@@ -319,7 +328,7 @@ async function loadFiles(path) {
       fileTableBody.appendChild(tr);
     });
   } catch (err) {
-    fileTableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--pixel-red);">Connection error: ${err.message}</td></tr>`;
+    fileTableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--pixel-red);">Ошибка подключения: ${err.message}</td></tr>`;
   }
 }
 
@@ -337,16 +346,16 @@ btnRefreshFiles.addEventListener('click', () => {
 });
 
 function formatFileSize(bytes) {
-  if (bytes === 0) return '0 B';
+  if (bytes === 0) return '0 Б';
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-// Connection Configuration
+// Настройка подключения
 btnAutoScan.addEventListener('click', async () => {
-  btnAutoScan.textContent = 'SCANNING...';
+  btnAutoScan.textContent = 'СКАНИРОВАНИЕ...';
   try {
     const res = await window.electronAPI.discoverBonjour();
     if (res.success && res.ip) {
@@ -354,16 +363,16 @@ btnAutoScan.addEventListener('click', async () => {
       inputPort.value = res.port || 8080;
       serverHost = res.ip;
       serverPort = res.port || 8080;
-      btnAutoScan.textContent = `FOUND: ${res.ip}`;
-      setTimeout(() => { btnAutoScan.textContent = '🔍 AUTO-DISCOVER (MDNS)'; }, 3000);
+      btnAutoScan.textContent = `НАЙДЕНО: ${res.ip}`;
+      setTimeout(() => { btnAutoScan.textContent = '🔍 АВТО-ПОИСК (MDNS)'; }, 3000);
       fetchTelemetry();
     } else {
-      btnAutoScan.textContent = 'NOT FOUND (USE USB)';
-      setTimeout(() => { btnAutoScan.textContent = '🔍 AUTO-DISCOVER (MDNS)'; }, 2500);
+      btnAutoScan.textContent = 'НЕ НАЙДЕНО (ИСПОЛЬЗУЙТЕ USB)';
+      setTimeout(() => { btnAutoScan.textContent = '🔍 АВТО-ПОИСК (MDNS)'; }, 2500);
     }
   } catch (err) {
-    btnAutoScan.textContent = 'ERROR SCANNING';
-    setTimeout(() => { btnAutoScan.textContent = '🔍 AUTO-DISCOVER (MDNS)'; }, 2500);
+    btnAutoScan.textContent = 'ОШИБКА ПОИСКА';
+    setTimeout(() => { btnAutoScan.textContent = '🔍 АВТО-ПОИСК (MDNS)'; }, 2500);
   }
 });
 
@@ -391,18 +400,18 @@ presetWifi.addEventListener('click', () => {
 });
 
 async function triggerAdbForward() {
-  adbOutput.textContent = 'Executing adb forward tcp:8080 tcp:8080...';
+  adbOutput.textContent = 'Выполнение adb forward tcp:8080 tcp:8080...';
   const result = await window.electronAPI.forwardAdb(8080);
   if (result.success) {
-    adbOutput.textContent = `[ADB SUCCESS] Port 8080 forwarded over USB.\nReady to connect to http://127.0.0.1:8080`;
+    adbOutput.textContent = `[УСПЕХ ADB] Порт 8080 перенаправлен по USB.\nГотово к подключению: http://127.0.0.1:8080`;
   } else {
-    adbOutput.textContent = `[ADB ERROR] ${result.error}`;
+    adbOutput.textContent = `[ОШИБКА ADB] ${result.error}`;
   }
 }
 
 btnAdbTunnel.addEventListener('click', triggerAdbForward);
 
-// Check ADB on startup
+// Проверка ADB при старте
 async function initAdb() {
   const dev = await window.electronAPI.checkAdbDevices();
   if (dev.success) {
@@ -441,7 +450,7 @@ if (btnWakeRemote) {
   });
 }
 
-// Remote Logs Tab Logic
+// Логика вкладки удаленных логов
 const macLogOutput = document.getElementById('macLogOutput');
 const inputLogFilter = document.getElementById('inputLogFilter');
 const logsCounter = document.getElementById('logsCounter');
@@ -481,23 +490,23 @@ function renderRemoteLogs() {
   }) : allRemoteLogs;
 
   if (logsCounter) {
-    logsCounter.textContent = `${filtered.length} entries (total: ${allRemoteLogs.length})`;
+    logsCounter.textContent = `${filtered.length} записей (всего: ${allRemoteLogs.length})`;
   }
 
   if (filtered.length === 0) {
-    macLogOutput.innerHTML = `<div class="term-line term-system">No log entries recorded yet.</div>`;
+    macLogOutput.innerHTML = `<div class="term-line term-system">Нет записей по заданному фильтру.</div>`;
     return;
   }
 
   const isScrolledToBottom = macLogOutput.scrollHeight - macLogOutput.clientHeight <= macLogOutput.scrollTop + 50;
 
   macLogOutput.innerHTML = filtered.map(e => {
-    const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '--:--:--';
-    const lvl = (e.level || 'INFO').toUpperCase();
+    const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleTimeString('ru-RU') : '--:--:--';
+    const lvl = (e.level || 'ИНФО').toUpperCase();
     let lvlClass = 'log-lvl-info';
-    if (lvl === 'WARN') lvlClass = 'log-lvl-warn';
-    else if (lvl === 'ERROR') lvlClass = 'log-lvl-err';
-    else if (lvl === 'SYSTEM') lvlClass = 'log-lvl-green';
+    if (lvl === 'WARN' || lvl === 'ВНИМАНИЕ') lvlClass = 'log-lvl-warn';
+    else if (lvl === 'ERROR' || lvl === 'ОШИБКА') lvlClass = 'log-lvl-err';
+    else if (lvl === 'SYSTEM' || lvl === 'СИСТЕМА') lvlClass = 'log-lvl-green';
 
     return `<div class="log-entry">
       <span class="log-time">[${timeStr}]</span>
@@ -518,7 +527,7 @@ if (inputLogFilter) {
 if (btnPauseLogs) {
   btnPauseLogs.addEventListener('click', () => {
     isLogsPaused = !isLogsPaused;
-    btnPauseLogs.textContent = isLogsPaused ? 'RESUME STREAM' : 'PAUSE STREAM';
+    btnPauseLogs.textContent = isLogsPaused ? 'ВОЗОБНОВИТЬ' : 'ПАУЗА ПОТОКА';
     btnPauseLogs.style.background = isLogsPaused ? 'var(--agy-amber)' : '';
   });
 }
@@ -535,14 +544,14 @@ if (btnClearRemoteLogs) {
 
 if (btnCopyLogs) {
   btnCopyLogs.addEventListener('click', () => {
-    const text = allRemoteLogs.map(e => `[${new Date(e.timestamp).toLocaleTimeString()}] [${e.level}] ${e.message}`).join('\n');
+    const text = allRemoteLogs.map(e => `[${new Date(e.timestamp).toLocaleTimeString('ru-RU')}] [${e.level}] ${e.message}`).join('\n');
     navigator.clipboard.writeText(text);
-    btnCopyLogs.textContent = 'COPIED!';
-    setTimeout(() => { btnCopyLogs.textContent = 'COPY ALL'; }, 2000);
+    btnCopyLogs.textContent = 'СКОПИРОВАНО!';
+    setTimeout(() => { btnCopyLogs.textContent = 'КОПИРОВАТЬ ВСЁ'; }, 2000);
   });
 }
 
-// Start polling
+// Запуск опроса
 initAdb();
 triggerAdbForward().then(() => fetchTelemetry());
 pollInterval = setInterval(fetchTelemetry, 2500);
