@@ -179,36 +179,8 @@ class HttpServer(
                     }
                 }
 
-                uriPath == "/" -> {
-                    val html = """
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <title>Android Server Node</title>
-                            <meta charset="utf-8">
-                            <style>
-                                body { background: #181816; color: #F4EFEA; font-family: monospace; padding: 24px; }
-                                .card { background: #22211E; border: 1px solid #3A3731; border-radius: 4px; padding: 16px; margin-bottom: 16px; }
-                                h1 { color: #D97757; font-size: 1.4rem; }
-                                .badge { background: #6EA378; color: #181816; padding: 2px 8px; border-radius: 2px; font-weight: bold; }
-                                a { color: #D97757; }
-                            </style>
-                        </head>
-                        <body>
-                            <h1>[ ANDROID NODE DAEMON ]</h1>
-                            <div class="card">
-                                <p><span class="badge">ONLINE</span> Autonomous Android Server</p>
-                                <p>Endpoints:</p>
-                                <ul>
-                                    <li><a href="/api/status">/api/status</a> - Hardware &amp; battery metrics</li>
-                                    <li><a href="/api/ping">/api/ping</a> - Health check</li>
-                                    <li><a href="/api/files?path=/sdcard">/api/files</a> - File browser</li>
-                                </ul>
-                            </div>
-                        </body>
-                        </html>
-                    """.trimIndent()
-                    sendResponse(output, 200, "OK", "text/html; charset=utf-8", html.toByteArray())
+                serveAsset(output, uriPath) -> {
+                    // Static web asset served
                 }
 
                 else -> {
@@ -219,6 +191,30 @@ class HttpServer(
             logCallback("Client handle exception: ${e.message}")
         } finally {
             try { socket.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun serveAsset(output: OutputStream, path: String): Boolean {
+        val clean = path.removePrefix("/").split("?")[0]
+        val relPath = if (clean.isEmpty() || clean == "index.html") "web/index.html" else "web/$clean"
+        return try {
+            context.assets.open(relPath).use { input ->
+                val bytes = input.readBytes()
+                val mime = when {
+                    relPath.endsWith(".html") -> "text/html; charset=utf-8"
+                    relPath.endsWith(".css") -> "text/css; charset=utf-8"
+                    relPath.endsWith(".js") -> "application/javascript; charset=utf-8"
+                    relPath.endsWith(".json") -> "application/json; charset=utf-8"
+                    relPath.endsWith(".png") -> "image/png"
+                    relPath.endsWith(".svg") -> "image/svg+xml"
+                    relPath.endsWith(".ico") -> "image/x-icon"
+                    else -> "application/octet-stream"
+                }
+                sendResponse(output, 200, "OK", mime, bytes)
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 

@@ -4,7 +4,35 @@ let isConnected = false;
 let currentPath = '/sdcard';
 let pollInterval = null;
 
-const getBaseUrl = () => `http://${serverHost}:${serverPort}`;
+if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
+  serverHost = window.location.hostname || '127.0.0.1';
+  serverPort = window.location.port ? parseInt(window.location.port, 10) : 8080;
+}
+
+// Android & Standalone browser fallback
+if (!window.electronAPI) {
+  window.electronAPI = {
+    forwardAdb: async () => ({ success: true, output: 'Local loopback active (127.0.0.1:8080)' }),
+    checkAdbDevices: async () => ({ success: true, output: 'Local Tablet Android Server Node' }),
+    discoverBonjour: async () => ({ success: true, ip: serverHost, port: serverPort }),
+    openExternal: (url) => { window.open(url, '_blank'); }
+  };
+}
+
+if (navigator.userAgent.includes('Android') || window.androidAPI) {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.classList.add('is-android');
+    const hdr = document.querySelector('.app-header');
+    if (hdr) hdr.style.paddingLeft = '16px';
+  });
+}
+
+const getBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
+    return window.location.origin;
+  }
+  return `http://${serverHost}:${serverPort}`;
+};
 
 // DOM Elements
 const connBadge = document.getElementById('connBadge');
@@ -377,6 +405,37 @@ async function initAdb() {
   if (dev.success) {
     adbOutput.textContent = dev.output;
   }
+}
+
+const btnDimRemote = document.getElementById('btnDimRemote');
+const btnWakeRemote = document.getElementById('btnWakeRemote');
+
+if (btnDimRemote) {
+  btnDimRemote.addEventListener('click', async () => {
+    if (window.androidAPI && typeof window.androidAPI.toggleDim === 'function') {
+      window.androidAPI.toggleDim();
+      return;
+    }
+    try {
+      await fetch(`${getBaseUrl()}/api/exec`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'input keyevent 26' })
+      });
+    } catch (_) {}
+  });
+}
+
+if (btnWakeRemote) {
+  btnWakeRemote.addEventListener('click', async () => {
+    try {
+      await fetch(`${getBaseUrl()}/api/exec`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'input keyevent 224' })
+      });
+    } catch (_) {}
+  });
 }
 
 // Start polling
