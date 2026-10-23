@@ -5,6 +5,7 @@ build/
 */build/
 *.apk
 *.aab
+*.dmg
 
 # Node / Electron
 node_modules/
