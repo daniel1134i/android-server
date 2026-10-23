@@ -642,6 +642,13 @@ const btnAutoPair = document.getElementById('btnAutoPair');
 const btnSidebarPair = document.getElementById('btnSidebarPair');
 const txtAutoPairStatus = document.getElementById('txtAutoPairStatus');
 const badgePairStatus = document.getElementById('badgePairStatus');
+const btnUnpair = document.getElementById('btnUnpair');
+
+if (cloudNodeId && badgePairStatus) {
+  badgePairStatus.className = 'badge badge-online';
+  badgePairStatus.textContent = '● УСТРОЙСТВО ПРИВЯЗАНО';
+  if (btnUnpair) btnUnpair.style.display = 'inline-block';
+}
 const pairSuccessBanner = document.getElementById('pairSuccessBanner');
 
 async function triggerAutoPairing() {
@@ -707,17 +714,20 @@ async function triggerAutoPairing() {
       }
       if (badgePairStatus) {
         badgePairStatus.className = 'badge badge-online';
-        badgePairStatus.textContent = '● СВЯЗАНО НАВСЕГДА';
+        badgePairStatus.textContent = '● УСТРОЙСТВО ПРИВЯЗАНО';
+      }
+      if (btnUnpair) {
+        btnUnpair.style.display = 'inline-block';
       }
       if (pairSuccessBanner) {
         pairSuccessBanner.innerHTML = `
           <div style="font-family: var(--font-pixel); font-size: 13px; color: #94c55f; margin-bottom: 6px;">
-            🎉 УСТРОЙСТВА УСПЕШНО СВЯЗАНЫ НАВСЕГДА!
+            🎉 УСТРОЙСТВО УСПЕШНО ПРИВЯЗАНО!
           </div>
           <div><b>Планшет:</b> ${escapeHtml(devName)} (Wi-Fi IP: <code>${escapeHtml(res.ip)}</code>)</div>
           <div><b>Облачный ID:</b> <code class="code-text" style="color:var(--agy-blue-light);">${escapeHtml(res.node_id)}</code> (E2E-ключ сохранен)</div>
           <div style="margin-top: 8px; font-size: 11px; color: var(--text-main);">
-            ✓ Теперь вы можете управлять этим сервером <b>из любой точки мира удаленно</b> через интернет. Кабель и нахождение в одной сети Wi-Fi больше не требуются!
+            ✓ Привязка сохранена в памяти контроллера. Вы можете управлять сервером по Wi-Fi или удаленно, а при необходимости нажать <b>«Отвязать устройство»</b> или выполнить сброс.
           </div>
         `;
         pairSuccessBanner.classList.remove('hidden');
@@ -759,6 +769,50 @@ async function triggerAutoPairing() {
 
 if (btnAutoPair) btnAutoPair.addEventListener('click', triggerAutoPairing);
 if (btnSidebarPair) btnSidebarPair.addEventListener('click', triggerAutoPairing);
+
+if (btnUnpair) {
+  btnUnpair.addEventListener('click', () => {
+    if (!confirm('Отвязать этот планшет? Ключи доступа на компьютере будут удалены.')) return;
+
+    if (cloudWs) {
+      try { cloudWs.close(); } catch (_) {}
+      cloudWs = null;
+      cloudIsReady = false;
+    }
+    cancelPendingCloudRpc('Устройство отвязано пользователем');
+
+    cloudNodeId = '';
+    cloudSecretKey = '';
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('cloud_node_id');
+      localStorage.removeItem('cloud_secret_key');
+    }
+
+    if (inputCloudNodeId) inputCloudNodeId.value = '';
+    if (inputCloudSecretKey) inputCloudSecretKey.value = '';
+
+    if (badgePairStatus) {
+      badgePairStatus.className = 'badge badge-dim';
+      badgePairStatus.textContent = 'ГОТОВО К ПОИСКУ';
+    }
+    if (badgeCloudStatus) {
+      badgeCloudStatus.className = 'badge badge-dim';
+      badgeCloudStatus.textContent = '☁ НЕ НАСТРОЕНО';
+    }
+    if (pairSuccessBanner) {
+      pairSuccessBanner.classList.add('hidden');
+      pairSuccessBanner.innerHTML = '';
+    }
+    if (txtAutoPairStatus) {
+      txtAutoPairStatus.textContent = '✓ Устройство успешно отвязано. Ключи удалены.';
+      txtAutoPairStatus.style.color = 'var(--agy-amber)';
+      setTimeout(() => { if (txtAutoPairStatus) txtAutoPairStatus.textContent = ''; }, 4000);
+    }
+    btnUnpair.style.display = 'none';
+    activeChannel = 'usb';
+    fetchTelemetry();
+  });
+}
 
 // Настройка подключения
 btnAutoScan.addEventListener('click', async () => {
@@ -1032,6 +1086,7 @@ if (btnFactoryReset) {
       if (inputCloudRelayUrl) inputCloudRelayUrl.value = 'ws://192.168.0.199:8088';
 
       // 7. Сбрасываем бейджи и баннеры в состояние первого запуска
+      if (btnUnpair) btnUnpair.style.display = 'none';
       if (badgePairStatus) {
         badgePairStatus.className = 'badge badge-dim';
         badgePairStatus.textContent = 'ГОТОВО К ПОИСКУ';

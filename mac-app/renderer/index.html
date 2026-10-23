@@ -395,12 +395,15 @@
             <span id="badgePairStatus" class="badge badge-dim">ГОТОВО К ПОИСКУ</span>
           </div>
           <p class="eco-p" style="margin-bottom: 14px;">
-            Запустите приложение на планшете и нажмите кнопку ниже. Компьютер автоматически найдет планшет по Wi-Fi, получит защищенные E2E-ключи и <b>свяжет устройства навсегда</b>. После этого вы сможете управлять сервером из любой точки мира удаленно!
+            Запустите приложение на планшете и нажмите кнопку ниже. Компьютер автоматически найдет планшет по Wi-Fi или USB, получит защищенные E2E-ключи и <b>сохранит привязку</b>. Вы сможете в любой момент отвязать устройство или сбросить настройки.
           </p>
 
-          <div style="display: flex; gap: 12px; align-items: center;">
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
             <button id="btnAutoPair" class="btn-pixel btn-pair-pulse">
               ⚡ НАЙТИ И СВЯЗАТЬ УСТРОЙСТВА
+            </button>
+            <button id="btnUnpair" class="btn-pixel-secondary" style="border-color: var(--agy-coral); color: var(--agy-coral); display: none;">
+              ✕ ОТВЯЗАТЬ УСТРОЙСТВО
             </button>
             <span id="txtAutoPairStatus" style="font-size: 11px; color: var(--text-muted);"></span>
           </div>
