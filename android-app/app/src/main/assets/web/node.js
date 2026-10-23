@@ -650,7 +650,6 @@ if (btnClearLogs) {
 
 const bannerResetAlert = document.getElementById('bannerResetAlert');
 const btnDismissResetBanner = document.getElementById('btnDismissResetBanner');
-const btnTabletReset = document.getElementById('btnTabletReset');
 let resetBannerTimer = null;
 
 function showResetBanner() {
@@ -689,33 +688,6 @@ if (window.location.search && window.location.search.includes('reset=1')) {
   if (logStreamBox) logStreamBox.innerHTML = '';
   lastLogCount = 0;
   try { window.history.replaceState({}, document.title, window.location.pathname); } catch (_) {}
-}
-
-if (btnTabletReset) {
-  btnTabletReset.addEventListener('click', async () => {
-    const ok = confirm("⚠️ ВНИМАНИЕ: ПОЛНЫЙ СБРОС ХОСТ-СЕРВЕРА\n\n• Будут остановлены все запущенные Node.js/Python приложения\n• Буфер логов будет полностью очищен\n• Будут сгенерированы новые ID и Secret Key безопасности\n\nВыполнить сброс к заводским настройкам?");
-    if (!ok) return;
-
-    btnTabletReset.disabled = true;
-    btnTabletReset.textContent = '⏳ СБРОС...';
-    try {
-      const res = await fetch('/api/reset', { method: 'POST' });
-      if (res.ok) {
-        showResetBanner();
-        if (logStreamBox) logStreamBox.innerHTML = '';
-        lastLogCount = 0;
-        appendLogEntry('⚡ [ЗАВОДСКОЙ СБРОС] Хост-сервер успешно сброшен к заводским настройкам', 'СИСТЕМА');
-        pollStatus();
-      } else {
-        alert('Ошибка сброса: HTTP ' + res.status);
-      }
-    } catch (e) {
-      alert('Ошибка соединения при сбросе: ' + e.message);
-    } finally {
-      btnTabletReset.disabled = false;
-      btnTabletReset.innerHTML = '<span class="btn-icon">⚠️</span> СБРОС';
-    }
-  });
 }
 
 // Инициализация при старте
