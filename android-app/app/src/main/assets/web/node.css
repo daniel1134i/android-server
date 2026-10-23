@@ -29,6 +29,10 @@
   user-select: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 body {
   font-family: var(--font-mono);
   background-color: var(--bg-main);

@@ -651,19 +651,36 @@ if (btnClearLogs) {
 const bannerResetAlert = document.getElementById('bannerResetAlert');
 const btnDismissResetBanner = document.getElementById('btnDismissResetBanner');
 const btnTabletReset = document.getElementById('btnTabletReset');
+let resetBannerTimer = null;
 
 function showResetBanner() {
   if (bannerResetAlert) {
+    bannerResetAlert.style.display = 'flex';
     bannerResetAlert.classList.remove('hidden');
-    setTimeout(() => {
-      if (bannerResetAlert) bannerResetAlert.classList.add('hidden');
-    }, 12000);
+    if (resetBannerTimer) clearTimeout(resetBannerTimer);
+    resetBannerTimer = setTimeout(hideResetBanner, 15000);
+  }
+}
+
+function hideResetBanner() {
+  if (bannerResetAlert) {
+    bannerResetAlert.style.display = 'none';
+    bannerResetAlert.classList.add('hidden');
+    if (resetBannerTimer) {
+      clearTimeout(resetBannerTimer);
+      resetBannerTimer = null;
+    }
   }
 }
 
 if (btnDismissResetBanner) {
-  btnDismissResetBanner.addEventListener('click', () => {
-    if (bannerResetAlert) bannerResetAlert.classList.add('hidden');
+  btnDismissResetBanner.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideResetBanner();
+  });
+  btnDismissResetBanner.addEventListener('touchend', (e) => {
+    e.stopPropagation();
+    hideResetBanner();
   });
 }
 
