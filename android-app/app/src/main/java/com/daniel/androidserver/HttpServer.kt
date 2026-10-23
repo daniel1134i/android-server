@@ -1,6 +1,7 @@
 package com.daniel.androidserver
 
 import android.content.Context
+import android.os.Build
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.*
@@ -118,6 +119,38 @@ class HttpServer(
 
                 uriPath == "/api/status" -> {
                     val resp = SystemStats.getFullStatus(context, port)
+                    sendJsonResponse(output, 200, resp)
+                }
+
+                uriPath == "/api/pair" && (method == "GET" || method == "POST") -> {
+                    if (!isLocalOrPrivateIp(socket.inetAddress)) {
+                        sendJsonResponse(output, 403, JSONObject().put("error", "Сопряжение разрешено только в локальной сети Wi-Fi или по USB"))
+                        return
+                    }
+
+                    val nodeId = ServerService.cloudRelay?.nodeId ?: ""
+                    val secretKey = ServerService.cloudRelay?.secretKey ?: ""
+                    val relayUrl = ServerService.cloudRelay?.relayUrl ?: ""
+                    val wifiIp = SystemStats.getIpAddress() ?: "127.0.0.1"
+
+                    ServerService.addLog("[СОПРЯЖЕНИЕ] Нода успешно связана с Mac контроллером")
+
+                    val resp = JSONObject().apply {
+                        put("status", "paired")
+                        put("node_id", nodeId)
+                        put("secret_key", secretKey)
+                        put("relay_url", relayUrl)
+                        put("relay_connected", ServerService.cloudRelay?.isConnected == true)
+                        put("wifi_ip", wifiIp)
+                        put("port", port)
+                        put("device", JSONObject().apply {
+                            put("model", Build.MODEL)
+                            put("manufacturer", Build.MANUFACTURER)
+                            put("android_version", Build.VERSION.RELEASE)
+                            put("sdk_int", Build.VERSION.SDK_INT)
+                        })
+                        put("paired_at", System.currentTimeMillis())
+                    }
                     sendJsonResponse(output, 200, resp)
                 }
 
@@ -417,5 +450,18 @@ class HttpServer(
             out.write(data)
         }
         out.flush()
+    }
+
+    private fun isLocalOrPrivateIp(address: InetAddress?): Boolean {
+        if (address == null) return false
+        if (address.isLoopbackAddress || address.isSiteLocalAddress) return true
+        val rawIp = address.hostAddress ?: return false
+        val ip = if (rawIp.startsWith("::ffff:")) rawIp.substring(7) else rawIp
+        if (ip == "127.0.0.1" || ip == "::1" || ip == "localhost") return true
+        if (ip.startsWith("192.168.")) return true
+        if (ip.startsWith("10.")) return true
+        if (ip.startsWith("169.254.")) return true
+        if (ip.matches(Regex("^172\\.(1[6-9]|2[0-9]|3[0-1])\\..*"))) return true
+        return false
     }
 }

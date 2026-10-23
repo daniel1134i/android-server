@@ -595,6 +595,129 @@ function formatFileSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+// ⚡ 1-Клик Авто-связывание устройств
+const btnAutoPair = document.getElementById('btnAutoPair');
+const btnSidebarPair = document.getElementById('btnSidebarPair');
+const txtAutoPairStatus = document.getElementById('txtAutoPairStatus');
+const badgePairStatus = document.getElementById('badgePairStatus');
+const pairSuccessBanner = document.getElementById('pairSuccessBanner');
+
+async function triggerAutoPairing() {
+  if (btnAutoPair) {
+    btnAutoPair.disabled = true;
+    btnAutoPair.textContent = '🔍 ПОИСК ПЛАНШЕТА...';
+  }
+  if (btnSidebarPair) {
+    btnSidebarPair.textContent = '🔍 ПОИСК...';
+  }
+  if (txtAutoPairStatus) {
+    txtAutoPairStatus.textContent = 'Поиск планшета в сети Wi-Fi (UDP 8081 & mDNS)...';
+    txtAutoPairStatus.style.color = 'var(--agy-blue-light)';
+  }
+  if (badgePairStatus) {
+    badgePairStatus.className = 'badge badge-dim';
+    badgePairStatus.textContent = 'ПОИСК...';
+  }
+  if (pairSuccessBanner) {
+    pairSuccessBanner.classList.add('hidden');
+  }
+
+  // Переключаем на вкладку настроек, если кликнули из сайдбара
+  const settingsTab = document.querySelector('.nav-item[data-tab="settings"]');
+  if (settingsTab && !settingsTab.classList.contains('active')) {
+    settingsTab.click();
+  }
+
+  try {
+    const res = await window.electronAPI.autoPairWifi();
+    if (res && res.success) {
+      wifiHost = res.ip;
+      cloudNodeId = res.node_id;
+      cloudSecretKey = res.secret_key;
+      cloudRelayUrl = res.relay_url || cloudRelayUrl;
+      serverPort = res.port || 8080;
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('android_wifi_host', wifiHost);
+        localStorage.setItem('cloud_node_id', cloudNodeId);
+        localStorage.setItem('cloud_secret_key', cloudSecretKey);
+        localStorage.setItem('cloud_relay_url', cloudRelayUrl);
+      }
+
+      if (inputHost) inputHost.value = wifiHost;
+      if (inputPort) inputPort.value = serverPort;
+      if (inputCloudNodeId) inputCloudNodeId.value = cloudNodeId;
+      if (inputCloudSecretKey) inputCloudSecretKey.value = cloudSecretKey;
+      if (inputCloudRelayUrl) inputCloudRelayUrl.value = cloudRelayUrl;
+
+      // Сразу поднимаем Cloud Relay соединение
+      if (cloudWs) {
+        try { cloudWs.close(); } catch (_) {}
+        cloudWs = null;
+      }
+      activeChannel = 'cloud';
+      initCloudRelay();
+
+      const devName = (res.device && res.device.model) ? `${res.device.manufacturer || ''} ${res.device.model}` : 'Redmi Pad SE';
+      if (txtAutoPairStatus) {
+        txtAutoPairStatus.textContent = `✓ Найдено и привязано: ${devName} (${res.ip})`;
+        txtAutoPairStatus.style.color = 'var(--agy-green)';
+      }
+      if (badgePairStatus) {
+        badgePairStatus.className = 'badge badge-online';
+        badgePairStatus.textContent = '● СВЯЗАНО НАВСЕГДА';
+      }
+      if (pairSuccessBanner) {
+        pairSuccessBanner.innerHTML = `
+          <div style="font-family: var(--font-pixel); font-size: 13px; color: #94c55f; margin-bottom: 6px;">
+            🎉 УСТРОЙСТВА УСПЕШНО СВЯЗАНЫ НАВСЕГДА!
+          </div>
+          <div><b>Планшет:</b> ${escapeHtml(devName)} (Wi-Fi IP: <code>${escapeHtml(res.ip)}</code>)</div>
+          <div><b>Облачный ID:</b> <code class="code-text" style="color:var(--agy-blue-light);">${escapeHtml(res.node_id)}</code> (E2E-ключ сохранен)</div>
+          <div style="margin-top: 8px; font-size: 11px; color: var(--text-main);">
+            ✓ Теперь вы можете управлять этим сервером <b>из любой точки мира удаленно</b> через интернет. Кабель и нахождение в одной сети Wi-Fi больше не требуются!
+          </div>
+        `;
+        pairSuccessBanner.classList.remove('hidden');
+      }
+
+      fetchTelemetry();
+
+      setTimeout(() => {
+        const tabTelemetry = document.querySelector('.nav-item[data-tab="telemetry"]');
+        if (tabTelemetry) tabTelemetry.click();
+      }, 3000);
+
+    } else {
+      const errMsg = res ? (res.error || 'Планшет не найден') : 'Ошибка связывания';
+      if (txtAutoPairStatus) {
+        txtAutoPairStatus.textContent = errMsg;
+        txtAutoPairStatus.style.color = 'var(--agy-coral)';
+      }
+      if (badgePairStatus) {
+        badgePairStatus.className = 'badge badge-offline';
+        badgePairStatus.textContent = 'НЕ НАЙДЕНО';
+      }
+    }
+  } catch (err) {
+    if (txtAutoPairStatus) {
+      txtAutoPairStatus.textContent = `Ошибка: ${err.message}`;
+      txtAutoPairStatus.style.color = 'var(--agy-coral)';
+    }
+  } finally {
+    if (btnAutoPair) {
+      btnAutoPair.disabled = false;
+      btnAutoPair.textContent = '⚡ НАЙТИ И СВЯЗАТЬ УСТРОЙСТВА';
+    }
+    if (btnSidebarPair) {
+      btnSidebarPair.textContent = '⚡ 1-КЛИК АВТО-СВЯЗЫВАНИЕ';
+    }
+  }
+}
+
+if (btnAutoPair) btnAutoPair.addEventListener('click', triggerAutoPairing);
+if (btnSidebarPair) btnSidebarPair.addEventListener('click', triggerAutoPairing);
+
 // Настройка подключения
 btnAutoScan.addEventListener('click', async () => {
   btnAutoScan.textContent = 'СКАНИРОВАНИЕ...';

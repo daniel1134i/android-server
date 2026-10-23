@@ -74,10 +74,13 @@
       </ul>
 
       <div class="sidebar-footer">
+        <button id="btnSidebarPair" class="btn-pixel-pair" title="Авто-поиск и привязка планшета по Wi-Fi">
+          ⚡ 1-КЛИК АВТО-СВЯЗЫВАНИЕ
+        </button>
         <button id="btnAdbTunnel" class="btn-pixel-secondary">
           ⚡ USB ADB ТУННЕЛЬ
         </button>
-        <div class="version-label">v1.0.0 :: АВТОНОМНЫЙ 24/7</div>
+        <div class="version-label">v1.2.0 :: АВТОНОМНЫЙ 24/7</div>
       </div>
     </nav>
 
@@ -382,7 +385,27 @@
       <section id="tab-settings" class="tab-pane">
         <div class="pane-header">
           <h2>[ НАСТРОЙКА ПОДКЛЮЧЕНИЯ ]</h2>
-          <span class="header-desc">Переключение между кабельным туннелем USB и сетью Wi-Fi</span>
+          <span class="header-desc">Умное связывание и переключение между Wi-Fi, USB и Cloud Relay</span>
+        </div>
+
+        <!-- КАРТОЧКА АВТО-СВЯЗЫВАНИЯ В 1 КЛИК -->
+        <div class="pixel-card hero-pair-card max-w-600" style="margin-bottom: 20px;">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: var(--agy-blue-light);">⚡ 1-КЛИК АВТО-СВЯЗЫВАНИЕ (НОВЫЙ ТИП ПОДКЛЮЧЕНИЯ)</span>
+            <span id="badgePairStatus" class="badge badge-dim">ГОТОВО К ПОИСКУ</span>
+          </div>
+          <p class="eco-p" style="margin-bottom: 14px;">
+            Запустите приложение на планшете и нажмите кнопку ниже. Компьютер автоматически найдет планшет по Wi-Fi, получит защищенные E2E-ключи и <b>свяжет устройства навсегда</b>. После этого вы сможете управлять сервером из любой точки мира удаленно!
+          </p>
+
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <button id="btnAutoPair" class="btn-pixel btn-pair-pulse">
+              ⚡ НАЙТИ И СВЯЗАТЬ УСТРОЙСТВА
+            </button>
+            <span id="txtAutoPairStatus" style="font-size: 11px; color: var(--text-muted);"></span>
+          </div>
+
+          <div id="pairSuccessBanner" class="pair-success-banner hidden"></div>
         </div>
 
         <div class="pixel-card max-w-600">

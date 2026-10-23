@@ -110,7 +110,11 @@ class DiscoveryService(
                                 put("server", "AndroidAutonomousServer")
                                 put("port", httpPort)
                                 put("model", Build.MODEL)
-                                put("version", "1.0.0")
+                                put("manufacturer", Build.MANUFACTURER)
+                                put("node_id", ServerService.cloudRelay?.nodeId ?: "")
+                                put("ip", SystemStats.getIpAddress() ?: "")
+                                put("version", "1.2.0")
+                                put("relay_connected", ServerService.cloudRelay?.isConnected == true)
                             }.toString()
 
                             val replyBytes = replyJson.toByteArray(Charsets.UTF_8)
