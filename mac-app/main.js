@@ -63,6 +63,18 @@ ipcMain.handle('adb:devices', async () => {
   });
 });
 
+ipcMain.handle('adb:exec', async (event, command) => {
+  return new Promise((resolve) => {
+    exec(`adb shell ${command}`, (err, stdout, stderr) => {
+      if (err) {
+        resolve({ success: false, error: stderr || err.message });
+      } else {
+        resolve({ success: true, output: stdout.trim() });
+      }
+    });
+  });
+});
+
 ipcMain.handle('bonjour:discover', async () => {
   return new Promise((resolve) => {
     exec("dns-sd -L AndroidServerNode _androidserver._tcp local & PID=$!; sleep 1.5; kill $PID 2>/dev/null", (err, stdout) => {

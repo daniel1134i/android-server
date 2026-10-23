@@ -422,34 +422,76 @@ async function initAdb() {
   }
 }
 
-const btnDimRemote = document.getElementById('btnDimRemote');
+const btnScreenOff = document.getElementById('btnScreenOff');
 const btnWakeRemote = document.getElementById('btnWakeRemote');
+const btnDimRemote = document.getElementById('btnDimRemote');
+const screenControlStatus = document.getElementById('screenControlStatus');
 
-if (btnDimRemote) {
-  btnDimRemote.addEventListener('click', async () => {
-    if (window.androidAPI && typeof window.androidAPI.toggleDim === 'function') {
-      window.androidAPI.toggleDim();
-      return;
-    }
+function updateScreenStatus(msg) {
+  if (!screenControlStatus) return;
+  screenControlStatus.textContent = msg;
+  setTimeout(() => {
+    if (screenControlStatus.textContent === msg) screenControlStatus.textContent = '';
+  }, 4000);
+}
+
+if (btnScreenOff) {
+  btnScreenOff.addEventListener('click', async () => {
+    updateScreenStatus('Отправка команды выключения экрана...');
     try {
-      await fetch(`${getBaseUrl()}/api/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'input keyevent 26' })
-      });
-    } catch (_) {}
+      const res = await fetch(`${getBaseUrl()}/api/screen/off`, { method: 'POST' });
+      if (!res.ok) {
+        // Запасной вызов через exec
+        await fetch(`${getBaseUrl()}/api/exec`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'input keyevent 223' })
+        });
+      }
+      updateScreenStatus('✓ Экран планшета выключен (сервер продолжает работу в фоне)');
+    } catch (e) {
+      updateScreenStatus(`Ошибка: ${e.message}`);
+    }
   });
 }
 
 if (btnWakeRemote) {
   btnWakeRemote.addEventListener('click', async () => {
+    updateScreenStatus('Отправка команды включения экрана...');
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/screen/on`, { method: 'POST' });
+      if (!res.ok) {
+        await fetch(`${getBaseUrl()}/api/exec`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'input keyevent 224' })
+        });
+      }
+      updateScreenStatus('✓ Экран планшета пробужден');
+    } catch (e) {
+      updateScreenStatus(`Ошибка: ${e.message}`);
+    }
+  });
+}
+
+if (btnDimRemote) {
+  btnDimRemote.addEventListener('click', async () => {
+    if (window.androidAPI && typeof window.androidAPI.toggleDim === 'function') {
+      window.androidAPI.toggleDim();
+      updateScreenStatus('Режим приглушения переключен');
+      return;
+    }
+    updateScreenStatus('Приглушение яркости экрана...');
     try {
       await fetch(`${getBaseUrl()}/api/exec`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'input keyevent 224' })
+        body: JSON.stringify({ command: 'settings put system screen_brightness 1' })
       });
-    } catch (_) {}
+      updateScreenStatus('✓ Яркость экрана установлена на минимум (1)');
+    } catch (e) {
+      updateScreenStatus(`Ошибка: ${e.message}`);
+    }
   });
 }
 
@@ -560,6 +602,7 @@ const btnTypeZip = document.getElementById('btnTypeZip');
 const groupGitDeploy = document.getElementById('groupGitDeploy');
 const groupZipDeploy = document.getElementById('groupZipDeploy');
 const inputGitUrl = document.getElementById('inputGitUrl');
+const inputGitToken = document.getElementById('inputGitToken');
 const inputZipFile = document.getElementById('inputZipFile');
 const btnPickZip = document.getElementById('btnPickZip');
 const txtZipChosen = document.getElementById('txtZipChosen');
@@ -646,6 +689,7 @@ if (btnDeployApp) {
 
     if (deployMode === 'git') {
       const url = inputGitUrl.value.trim();
+      const token = inputGitToken ? inputGitToken.value.trim() : '';
       if (!url) {
         showDeployStatus('Пожалуйста, укажите ссылку на Git-репозиторий', 'error');
         return;
@@ -656,7 +700,7 @@ if (btnDeployApp) {
         const res = await fetch(`${getBaseUrl()}/api/apps/deploy-git`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, name, command })
+          body: JSON.stringify({ url, name, command, token })
         });
         const data = await res.json();
         if (data.error) {
@@ -726,6 +770,9 @@ async function loadAppsList() {
 
       const uptimeStr = isRunning ? formatSeconds(app.uptime_s) : '--';
       const pidStr = isRunning ? app.pid : '--';
+      const shortPath = app.path.includes('ServerApps') ? 
+        `.../ServerApps/${app.name}` : 
+        app.path;
 
       return `
         <div class="app-card ${isRunning ? 'running' : 'stopped'}">
@@ -735,7 +782,7 @@ async function loadAppsList() {
           </div>
           <div class="app-info-row">
             <span class="label">Путь:</span>
-            <span class="val">${escapeHtml(app.path)}</span>
+            <span class="val" title="${escapeHtml(app.path)}">${escapeHtml(shortPath)}</span>
           </div>
           <div class="app-info-row">
             <span class="label">PID:</span>

@@ -422,34 +422,78 @@ async function initAdb() {
   }
 }
 
-const btnDimRemote = document.getElementById('btnDimRemote');
+const btnScreenOff = document.getElementById('btnScreenOff');
 const btnWakeRemote = document.getElementById('btnWakeRemote');
+const btnDimRemote = document.getElementById('btnDimRemote');
+const screenControlStatus = document.getElementById('screenControlStatus');
 
-if (btnDimRemote) {
-  btnDimRemote.addEventListener('click', async () => {
-    if (window.androidAPI && typeof window.androidAPI.toggleDim === 'function') {
-      window.androidAPI.toggleDim();
-      return;
+function updateScreenStatus(msg) {
+  if (!screenControlStatus) return;
+  screenControlStatus.textContent = msg;
+  setTimeout(() => {
+    if (screenControlStatus.textContent === msg) screenControlStatus.textContent = '';
+  }, 4000);
+}
+
+if (btnScreenOff) {
+  btnScreenOff.addEventListener('click', async () => {
+    updateScreenStatus('Отправка команды выключения экрана...');
+    let done = false;
+    if (window.electronAPI && typeof window.electronAPI.execAdb === 'function') {
+      const adbRes = await window.electronAPI.execAdb('input keyevent 223');
+      if (adbRes.success) done = true;
     }
     try {
-      await fetch(`${getBaseUrl()}/api/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'input keyevent 26' })
-      });
+      await fetch(`${getBaseUrl()}/api/screen/off`, { method: 'POST' });
     } catch (_) {}
+
+    if (done) {
+      updateScreenStatus('✓ Экран планшета выключен (сервер продолжает работу в фоне)');
+    } else {
+      updateScreenStatus('✓ Команда сна отправлена на устройство');
+    }
   });
 }
 
 if (btnWakeRemote) {
   btnWakeRemote.addEventListener('click', async () => {
+    updateScreenStatus('Отправка команды включения экрана...');
+    let done = false;
+    if (window.electronAPI && typeof window.electronAPI.execAdb === 'function') {
+      const adbRes = await window.electronAPI.execAdb('input keyevent 224');
+      if (adbRes.success) done = true;
+    }
+    try {
+      await fetch(`${getBaseUrl()}/api/screen/on`, { method: 'POST' });
+    } catch (_) {}
+
+    if (done) {
+      updateScreenStatus('✓ Экран планшета пробужден');
+    } else {
+      updateScreenStatus('✓ Команда пробуждения отправлена');
+    }
+  });
+}
+
+if (btnDimRemote) {
+  btnDimRemote.addEventListener('click', async () => {
+    if (window.androidAPI && typeof window.androidAPI.toggleDim === 'function') {
+      window.androidAPI.toggleDim();
+      updateScreenStatus('Режим приглушения переключен');
+      return;
+    }
+    updateScreenStatus('Приглушение яркости экрана...');
+    if (window.electronAPI && typeof window.electronAPI.execAdb === 'function') {
+      await window.electronAPI.execAdb('settings put system screen_brightness 1');
+    }
     try {
       await fetch(`${getBaseUrl()}/api/exec`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'input keyevent 224' })
+        body: JSON.stringify({ command: 'settings put system screen_brightness 1' })
       });
     } catch (_) {}
+    updateScreenStatus('✓ Яркость экрана установлена на минимум (1)');
   });
 }
 
@@ -728,6 +772,9 @@ async function loadAppsList() {
 
       const uptimeStr = isRunning ? formatSeconds(app.uptime_s) : '--';
       const pidStr = isRunning ? app.pid : '--';
+      const shortPath = app.path.includes('ServerApps') ? 
+        `.../ServerApps/${app.name}` : 
+        app.path;
 
       return `
         <div class="app-card ${isRunning ? 'running' : 'stopped'}">
@@ -737,7 +784,7 @@ async function loadAppsList() {
           </div>
           <div class="app-info-row">
             <span class="label">Путь:</span>
-            <span class="val">${escapeHtml(app.path)}</span>
+            <span class="val" title="${escapeHtml(app.path)}">${escapeHtml(shortPath)}</span>
           </div>
           <div class="app-info-row">
             <span class="label">PID:</span>

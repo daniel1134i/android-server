@@ -786,6 +786,8 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .app-card.running {
@@ -832,13 +834,29 @@ body {
 .app-info-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   margin-bottom: 4px;
   color: var(--text-muted);
+  min-width: 0;
 }
 
-.app-info-row .label { color: var(--text-dim); }
-.app-info-row .val { color: var(--text-main); font-family: var(--font-mono); }
+.app-info-row .label {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.app-info-row .val {
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: calc(100% - 65px);
+  text-align: right;
+  min-width: 0;
+}
 
 .app-actions-row {
   display: flex;

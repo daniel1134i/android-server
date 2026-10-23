@@ -221,6 +221,18 @@ class HttpServer(
                     sendJsonResponse(output, 200, JSONObject().put("name", name).put("logs", logs))
                 }
 
+                uriPath == "/api/screen/off" && method == "POST" -> {
+                    executeShell("input keyevent 223") // KEYCODE_SLEEP
+                    ServerService.addLog("Экран переведен в спящий режим (выключен)", "ПИТАНИЕ")
+                    sendJsonResponse(output, 200, JSONObject().put("status", "ok").put("screen", "off"))
+                }
+
+                uriPath == "/api/screen/on" && method == "POST" -> {
+                    executeShell("input keyevent 224") // KEYCODE_WAKEUP
+                    ServerService.addLog("Экран включен (пробуждение)", "ПИТАНИЕ")
+                    sendJsonResponse(output, 200, JSONObject().put("status", "ok").put("screen", "on"))
+                }
+
                 uriPath == "/api/exec" && method == "POST" -> {
                     val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
                     val command = reqJson.optString("command", "").trim()
