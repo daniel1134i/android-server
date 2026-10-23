@@ -1,0 +1,12 @@
+{
+  "name": "android-server-cloud-relay",
+  "version": "1.0.0",
+  "description": "Multi-Tenant Zero-Trust WebSocket Relay for Android Server and Mac Controller",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -11,6 +11,34 @@ import java.io.RandomAccessFile
 
 object SystemStats {
 
+    var serverStartTime: Long = System.currentTimeMillis()
+
+    fun getFullStatus(context: Context, port: Int = 8080): JSONObject {
+        val bm = BatteryMonitor(context).apply { start() }
+        val batJson = bm.getInfo().toJson()
+        bm.stop()
+
+        return JSONObject().apply {
+            put("status", "online")
+            put("uptime_s", (System.currentTimeMillis() - serverStartTime) / 1000)
+            put("system_uptime_s", getUptimeSeconds())
+            put("battery", batJson)
+            put("memory", getMemoryInfo(context))
+            put("storage", getStorageInfo())
+            put("device", getDeviceInfo())
+            put("network", JSONObject().apply {
+                put("ip", getIpAddress() ?: "127.0.0.1")
+                put("port", port)
+            })
+            put("cloud", JSONObject().apply {
+                put("node_id", ServerService.cloudRelay?.nodeId ?: "")
+                put("secret_key", ServerService.cloudRelay?.secretKey ?: "")
+                put("connected", ServerService.cloudRelay?.isConnected == true)
+                put("relay_url", ServerService.cloudRelay?.relayUrl ?: "")
+            })
+        }
+    }
+
     fun getMemoryInfo(context: Context): JSONObject {
         val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         val memInfo = ActivityManager.MemoryInfo()

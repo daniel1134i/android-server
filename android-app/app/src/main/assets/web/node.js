@@ -152,6 +152,17 @@ async function pollStatus() {
       badgeWifi.textContent = `WI-FI: http://${net.ip}:${net.port || 8080}`;
     }
 
+    // Облачный Relay статус
+    const cloud = data.cloud || {};
+    const valCloudId = document.getElementById('valCloudId');
+    if (valCloudId && cloud.node_id) {
+      valCloudId.textContent = cloud.node_id;
+      valCloudId.title = `Секретный ключ: ${cloud.secret_key || ''}\nСтатус: ${cloud.connected ? 'Подключено к релею' : 'Ожидание'}`;
+      valCloudId.onclick = () => {
+        alert(`Ваш облачный доступ:\n\nNode ID: ${cloud.node_id}\nСекретный ключ: ${cloud.secret_key}\nРелей: ${cloud.relay_url}\n\nНикому не сообщайте секретный ключ!`);
+      };
+    }
+
     // Приложения
     try {
       const appsRes = await fetch('/api/apps', { cache: 'no-store' });

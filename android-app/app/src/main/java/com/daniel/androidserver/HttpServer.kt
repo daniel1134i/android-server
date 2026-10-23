@@ -117,18 +117,22 @@ class HttpServer(
                 }
 
                 uriPath == "/api/status" -> {
+                    val resp = SystemStats.getFullStatus(context, port)
+                    sendJsonResponse(output, 200, resp)
+                }
+
+                uriPath == "/api/cloud/config" && method == "POST" -> {
+                    val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
+                    val newUrl = reqJson.optString("relay_url", "").trim()
+                    if (newUrl.isNotEmpty()) {
+                        ServerService.cloudRelay?.updateRelayUrl(newUrl)
+                    }
                     val resp = JSONObject().apply {
-                        put("status", "online")
-                        put("uptime_s", (System.currentTimeMillis() - startTime) / 1000)
-                        put("system_uptime_s", SystemStats.getUptimeSeconds())
-                        put("battery", batteryMonitor.getInfo().toJson())
-                        put("memory", SystemStats.getMemoryInfo(context))
-                        put("storage", SystemStats.getStorageInfo())
-                        put("device", SystemStats.getDeviceInfo())
-                        put("network", JSONObject().apply {
-                            put("ip", SystemStats.getIpAddress() ?: "127.0.0.1")
-                            put("port", port)
-                        })
+                        put("status", "ok")
+                        put("node_id", ServerService.cloudRelay?.nodeId ?: "")
+                        put("secret_key", ServerService.cloudRelay?.secretKey ?: "")
+                        put("relay_url", ServerService.cloudRelay?.relayUrl ?: "")
+                        put("connected", ServerService.cloudRelay?.isConnected == true)
                     }
                     sendJsonResponse(output, 200, resp)
                 }

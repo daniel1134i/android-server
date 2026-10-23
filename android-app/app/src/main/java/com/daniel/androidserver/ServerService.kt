@@ -21,6 +21,9 @@ class ServerService : Service() {
         var isRunning: Boolean = false
             private set
 
+        var cloudRelay: CloudRelayClient? = null
+            private set
+
         val logRing: MutableList<org.json.JSONObject> = java.util.Collections.synchronizedList(java.util.LinkedList())
 
         fun addLog(msg: String, level: String = "INFO") {
@@ -86,6 +89,17 @@ class ServerService : Service() {
             broadcastLog(logMsg)
         }.apply { start() }
 
+        // Запуск защищенного Cloud Relay клиента
+        try {
+            val relay = CloudRelayClient(this) { logMsg ->
+                broadcastLog(logMsg)
+            }
+            cloudRelay = relay
+            relay.start()
+        } catch (e: Exception) {
+            addLog("Не удалось инициализировать Cloud Relay: ${e.message}", "ОШИБКА")
+        }
+
         isRunning = true
         broadcastLog("Server service started on port 8080")
     }
@@ -104,6 +118,10 @@ class ServerService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        try {
+            cloudRelay?.stop()
+            cloudRelay = null
+        } catch (_: Exception) {}
         discoveryService?.stop()
         httpServer?.stop()
         batteryMonitor?.stop()

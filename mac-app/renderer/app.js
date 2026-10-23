@@ -1,10 +1,111 @@
 const USB_HOST = '127.0.0.1';
 let wifiHost = (typeof localStorage !== 'undefined' ? localStorage.getItem('android_wifi_host') : null) || '192.168.0.82';
 let serverPort = 8080;
-let activeChannel = 'usb'; // 'usb' | 'wifi'
+let activeChannel = 'usb'; // 'usb' | 'wifi' | 'cloud'
 let isConnected = false;
 let currentPath = '/sdcard';
 let pollInterval = null;
+
+// Настройки Cloud Relay (для доступа за 1000 км через интернет)
+let cloudNodeId = (typeof localStorage !== 'undefined' ? localStorage.getItem('cloud_node_id') : null) || '';
+let cloudSecretKey = (typeof localStorage !== 'undefined' ? localStorage.getItem('cloud_secret_key') : null) || '';
+let cloudRelayUrl = (typeof localStorage !== 'undefined' ? localStorage.getItem('cloud_relay_url') : null) || 'ws://192.168.0.199:8088';
+let cloudWs = null;
+let cloudIsReady = false;
+const pendingCloudRpc = new Map();
+
+function initCloudRelay() {
+  if (!cloudNodeId || !cloudSecretKey || !cloudRelayUrl) return;
+  if (cloudWs && (cloudWs.readyState === WebSocket.OPEN || cloudWs.readyState === WebSocket.CONNECTING)) return;
+
+  try {
+    cloudWs = new WebSocket(cloudRelayUrl);
+
+    cloudWs.onopen = () => {
+      cloudWs.send(JSON.stringify({
+        type: 'register',
+        role: 'controller',
+        nodeId: cloudNodeId,
+        token: cloudSecretKey
+      }));
+    };
+
+    cloudWs.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'registered') {
+          cloudIsReady = true;
+          updateCloudUi(true);
+        }
+        if (msg.type === 'error') {
+          cloudIsReady = false;
+          updateCloudUi(false, msg.message);
+        }
+        if (msg.rpc === 'res') {
+          const p = pendingCloudRpc.get(msg.id);
+          if (p) {
+            clearTimeout(p.timer);
+            pendingCloudRpc.delete(msg.id);
+            p.resolve(msg.data);
+          }
+        }
+      } catch (_) {}
+    };
+
+    cloudWs.onclose = () => {
+      cloudIsReady = false;
+      updateCloudUi(false);
+      setTimeout(initCloudRelay, 4000);
+    };
+
+    cloudWs.onerror = () => {
+      cloudIsReady = false;
+      updateCloudUi(false);
+    };
+  } catch (_) {}
+}
+
+function sendCloudRpc(path, method = 'GET', body = null, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    if (!cloudWs || cloudWs.readyState !== WebSocket.OPEN || !cloudIsReady) {
+      return reject(new Error('Cloud Relay WebSocket не подключен'));
+    }
+    const id = 'req_' + Math.random().toString(36).substring(2, 10);
+    const timer = setTimeout(() => {
+      pendingCloudRpc.delete(id);
+      reject(new Error(`Таймаут Cloud RPC: ${path}`));
+    }, timeoutMs);
+
+    pendingCloudRpc.set(id, { resolve, reject, timer });
+    cloudWs.send(JSON.stringify({ rpc: 'req', id, path, method, body }));
+  });
+}
+
+function updateCloudUi(connected, errorMsg = '') {
+  const badge = document.getElementById('badgeCloudStatus');
+  const txt = document.getElementById('txtCloudConnectStatus');
+  if (badge) {
+    if (connected) {
+      badge.className = 'badge badge-online';
+      badge.textContent = '☁ ОБЛАКО: АКТИВНО';
+    } else {
+      badge.className = 'badge badge-dim';
+      badge.textContent = errorMsg ? `☁ ${errorMsg}` : '☁ НЕ ПОДКЛЮЧЕНО';
+    }
+  }
+  if (txt) {
+    txt.textContent = connected ? '✓ Подключено к релею' : (errorMsg || '');
+  }
+}
+
+function syncCloudInputs() {
+  const inId = document.getElementById('inputCloudNodeId');
+  const inSec = document.getElementById('inputCloudSecretKey');
+  const inRelay = document.getElementById('inputCloudRelayUrl');
+  if (inId && !inId.value) inId.value = cloudNodeId || '';
+  if (inSec && !inSec.value) inSec.value = cloudSecretKey || '';
+  if (inRelay && !inRelay.value) inRelay.value = cloudRelayUrl || '';
+}
 
 if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
   wifiHost = window.location.hostname || wifiHost;
@@ -31,13 +132,22 @@ if (navigator.userAgent.includes('Android') || window.androidAPI) {
   });
 }
 
-const getBaseUrl = () => {
-  if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
-    return window.location.origin;
+// Универсальная обертка API (автоматически использует USB / Wi-Fi / Cloud Relay)
+async function apiCall(path, method = 'GET', body = null) {
+  if (activeChannel === 'cloud') {
+    return await sendCloudRpc(path, method, body);
   }
-  const host = (activeChannel === 'wifi' && wifiHost) ? wifiHost : USB_HOST;
-  return `http://${host}:${serverPort}`;
-};
+  const url = `${getBaseUrl()}${path}`;
+  const options = {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store'
+  };
+  const res = await fetch(url, options);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}
 
 // DOM Элементы
 const connBadge = document.getElementById('connBadge');
@@ -111,7 +221,7 @@ function formatSeconds(sec) {
   return `${h}ч ${m}м ${s}с`;
 }
 
-// Опрос телеметрии с мгновенным автоматическим переключением каналов (USB <-> Wi-Fi)
+// Опрос телеметрии с трехканальным отказоустойчивым переключением (USB <-> Wi-Fi <-> Cloud Relay)
 async function fetchTelemetry() {
   const t0 = performance.now();
   let data = null;
@@ -140,7 +250,7 @@ async function fetchTelemetry() {
         data = await tryHost(USB_HOST, 900);
         channel = 'usb';
       } catch (usbErr) {
-        // Кабель отключен! Мгновенно пробуем Wi-Fi без ухода в оффлайн
+        // Кабель отключен! Мгновенно пробуем Wi-Fi
         if (wifiHost) {
           try {
             data = await tryHost(wifiHost, 1500);
@@ -148,21 +258,59 @@ async function fetchTelemetry() {
             channel = 'wifi';
           } catch (_) {}
         }
+        // Если и Wi-Fi недоступен (пользователь уехал) — пробуем Cloud Relay
+        if (!data && cloudIsReady) {
+          try {
+            data = await sendCloudRpc('/api/status', 'GET', null, 3000);
+            activeChannel = 'cloud';
+            channel = 'cloud';
+          } catch (_) {}
+        }
         if (!data) throw usbErr;
       }
-    } else {
+    } else if (activeChannel === 'wifi') {
       // Активен Wi-Fi
       try {
         data = await tryHost(wifiHost, 1500);
         channel = 'wifi';
       } catch (wifiErr) {
-        // Пробуем USB (вдруг кабель подключили)
+        // Пробуем USB
         try {
           data = await tryHost(USB_HOST, 800);
           activeChannel = 'usb';
           channel = 'usb';
         } catch (_) {}
+        // Пробуем Cloud Relay
+        if (!data && cloudIsReady) {
+          try {
+            data = await sendCloudRpc('/api/status', 'GET', null, 3000);
+            activeChannel = 'cloud';
+            channel = 'cloud';
+          } catch (_) {}
+        }
         if (!data) throw wifiErr;
+      }
+    } else {
+      // Активен Cloud Relay канал
+      try {
+        data = await sendCloudRpc('/api/status', 'GET', null, 4000);
+        channel = 'cloud';
+      } catch (cloudErr) {
+        // Пробуем локальные каналы (вдруг вернулись домой)
+        try {
+          data = await tryHost(USB_HOST, 800);
+          activeChannel = 'usb';
+          channel = 'usb';
+        } catch (_) {
+          if (wifiHost) {
+            try {
+              data = await tryHost(wifiHost, 1000);
+              activeChannel = 'wifi';
+              channel = 'wifi';
+            } catch (_) {}
+          }
+        }
+        if (!data) throw cloudErr;
       }
     }
 
@@ -175,6 +323,25 @@ async function fetchTelemetry() {
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('android_wifi_host', wifiHost);
         }
+      }
+    }
+
+    // Автоматическая привязка учетных данных Cloud Relay при первом локальном контакте
+    if (data.cloud && data.cloud.node_id) {
+      let changed = false;
+      if (!cloudNodeId) {
+        cloudNodeId = data.cloud.node_id;
+        if (typeof localStorage !== 'undefined') localStorage.setItem('cloud_node_id', cloudNodeId);
+        changed = true;
+      }
+      if (!cloudSecretKey && data.cloud.secret_key) {
+        cloudSecretKey = data.cloud.secret_key;
+        if (typeof localStorage !== 'undefined') localStorage.setItem('cloud_secret_key', cloudSecretKey);
+        changed = true;
+      }
+      syncCloudInputs();
+      if (changed || !cloudIsReady) {
+        initCloudRelay();
       }
     }
 
@@ -191,18 +358,21 @@ function updateConnectionUi(online, latency = 0, channel = activeChannel) {
     connBadge.className = 'badge badge-online';
     if (channel === 'usb') {
       connBadge.innerHTML = '● ОНЛАЙН <span style="color: var(--agy-amber); font-size: 10px; margin-left: 4px;">[⚡ USB]</span>';
-    } else {
+    } else if (channel === 'wifi') {
       connBadge.innerHTML = `● ОНЛАЙН <span style="color: var(--agy-blue-light); font-size: 10px; margin-left: 4px;">[📶 WI-FI]</span>`;
+    } else if (channel === 'cloud') {
+      connBadge.innerHTML = `● ОНЛАЙН <span style="color: #a78bfa; font-size: 10px; margin-left: 4px;">[☁ ОБЛАКО]</span>`;
     }
     latencyBadge.textContent = `ПИНГ: ${latency}мс`;
-    valDaemonStatus.textContent = `Онлайн [${channel === 'usb' ? 'USB КАБЕЛЬ' : 'WI-FI ' + (wifiHost || '')}]`;
+    const hostDesc = channel === 'usb' ? 'USB КАБЕЛЬ' : (channel === 'wifi' ? 'WI-FI ' + (wifiHost || '') : 'Cloud Relay: ' + (cloudNodeId || ''));
+    valDaemonStatus.textContent = `Онлайн [${hostDesc}]`;
     valDaemonStatus.className = 'metric-val highlight-green';
-    valActiveHost.textContent = getBaseUrl();
+    valActiveHost.textContent = channel === 'cloud' ? `cloud://${cloudNodeId}` : getBaseUrl();
   } else {
     connBadge.className = 'badge badge-offline';
     connBadge.textContent = '○ ОФФЛАЙН';
     latencyBadge.textContent = 'ПИНГ: --мс';
-    valDaemonStatus.textContent = 'Оффлайн [Поиск USB / Wi-Fi...]';
+    valDaemonStatus.textContent = 'Оффлайн [Поиск USB / Wi-Fi / Cloud...]';
     valDaemonStatus.className = 'metric-val';
   }
 }
@@ -273,12 +443,7 @@ async function runCommand(cmd) {
   termOutput.appendChild(cmdLine);
 
   try {
-    const res = await fetch(`${getBaseUrl()}/api/exec`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command })
-    });
-    const result = await res.json();
+    const result = await apiCall('/api/exec', 'POST', { command });
 
     if (result.stdout && result.stdout.trim()) {
       const outLine = document.createElement('div');
@@ -335,8 +500,7 @@ async function loadFiles(path) {
   fileTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Загрузка...</td></tr>';
 
   try {
-    const res = await fetch(`${getBaseUrl()}/api/files?path=${encodeURIComponent(path)}`);
-    const data = await res.json();
+    const data = await apiCall(`/api/files?path=${encodeURIComponent(path)}`, 'GET', { path });
 
     if (data.error) {
       fileTableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--pixel-red);">${data.error}</td></tr>`;
@@ -475,6 +639,15 @@ presetWifi.addEventListener('click', () => {
   fetchTelemetry();
 });
 
+const presetCloud = document.getElementById('presetCloud');
+if (presetCloud) {
+  presetCloud.addEventListener('click', () => {
+    activeChannel = 'cloud';
+    initCloudRelay();
+    fetchTelemetry();
+  });
+}
+
 async function triggerAdbForward() {
   adbOutput.textContent = 'Выполнение adb forward tcp:8080 tcp:8080...';
   const result = await window.electronAPI.forwardAdb(8080);
@@ -493,6 +666,59 @@ async function initAdb() {
   if (dev.success) {
     adbOutput.textContent = dev.output;
   }
+}
+
+// Настройки Cloud Relay
+const btnConnectCloud = document.getElementById('btnConnectCloud');
+const inputCloudNodeId = document.getElementById('inputCloudNodeId');
+const inputCloudSecretKey = document.getElementById('inputCloudSecretKey');
+const inputCloudRelayUrl = document.getElementById('inputCloudRelayUrl');
+
+if (inputCloudNodeId) {
+  inputCloudNodeId.value = cloudNodeId;
+  inputCloudNodeId.addEventListener('input', (e) => {
+    cloudNodeId = e.target.value.trim();
+    if (typeof localStorage !== 'undefined') localStorage.setItem('cloud_node_id', cloudNodeId);
+  });
+}
+if (inputCloudSecretKey) {
+  inputCloudSecretKey.value = cloudSecretKey;
+  inputCloudSecretKey.addEventListener('input', (e) => {
+    cloudSecretKey = e.target.value.trim();
+    if (typeof localStorage !== 'undefined') localStorage.setItem('cloud_secret_key', cloudSecretKey);
+  });
+}
+if (inputCloudRelayUrl) {
+  inputCloudRelayUrl.value = cloudRelayUrl;
+  inputCloudRelayUrl.addEventListener('input', (e) => {
+    cloudRelayUrl = e.target.value.trim();
+    if (typeof localStorage !== 'undefined') localStorage.setItem('cloud_relay_url', cloudRelayUrl);
+  });
+}
+if (btnConnectCloud) {
+  btnConnectCloud.addEventListener('click', async () => {
+    if (inputCloudNodeId) cloudNodeId = inputCloudNodeId.value.trim();
+    if (inputCloudSecretKey) cloudSecretKey = inputCloudSecretKey.value.trim();
+    if (inputCloudRelayUrl) cloudRelayUrl = inputCloudRelayUrl.value.trim();
+
+    if (!cloudNodeId || !cloudSecretKey) {
+      updateCloudUi(false, 'Укажите Node ID и Secret Key');
+      return;
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('cloud_node_id', cloudNodeId);
+      localStorage.setItem('cloud_secret_key', cloudSecretKey);
+      localStorage.setItem('cloud_relay_url', cloudRelayUrl);
+    }
+    if (cloudWs) {
+      try { cloudWs.close(); } catch (_) {}
+      cloudWs = null;
+    }
+    updateCloudUi(false, 'Подключение...');
+    initCloudRelay();
+    activeChannel = 'cloud';
+    fetchTelemetry();
+  });
 }
 
 const btnScreenOff = document.getElementById('btnScreenOff');
@@ -517,7 +743,7 @@ if (btnScreenOff) {
       if (adbRes.success) done = true;
     }
     try {
-      await fetch(`${getBaseUrl()}/api/screen/off`, { method: 'POST' });
+      await apiCall('/api/screen/off', 'POST');
     } catch (_) {}
 
     if (done) {
@@ -537,7 +763,7 @@ if (btnWakeRemote) {
       if (adbRes.success) done = true;
     }
     try {
-      await fetch(`${getBaseUrl()}/api/screen/on`, { method: 'POST' });
+      await apiCall('/api/screen/on', 'POST');
     } catch (_) {}
 
     if (done) {
@@ -560,11 +786,7 @@ if (btnDimRemote) {
       await window.electronAPI.execAdb('settings put system screen_brightness 1');
     }
     try {
-      await fetch(`${getBaseUrl()}/api/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'settings put system screen_brightness 1' })
-      });
+      await apiCall('/api/exec', 'POST', { command: 'settings put system screen_brightness 1' });
     } catch (_) {}
     updateScreenStatus('✓ Яркость экрана установлена на минимум (1)');
   });
@@ -593,10 +815,8 @@ function escapeHtml(str) {
 async function fetchRemoteLogs() {
   if (isLogsPaused) return;
   try {
-    const res = await fetch(`${getBaseUrl()}/api/logs`, { cache: 'no-store' });
-    if (!res.ok) return;
-    const data = await res.json();
-    allRemoteLogs = data.logs || [];
+    const data = await apiCall('/api/logs');
+    allRemoteLogs = (data && data.logs) ? data.logs : [];
     renderRemoteLogs();
   } catch (_) {}
 }
@@ -655,7 +875,7 @@ if (btnPauseLogs) {
 if (btnClearRemoteLogs) {
   btnClearRemoteLogs.addEventListener('click', async () => {
     try {
-      await fetch(`${getBaseUrl()}/api/logs/clear`);
+      await apiCall('/api/logs/clear', 'POST');
       allRemoteLogs = [];
       renderRemoteLogs();
     } catch (_) {}
@@ -772,13 +992,8 @@ if (btnDeployApp) {
 
       showDeployStatus(`Загрузка и деплой репозитория '${name}'...`, 'loading');
       try {
-        const res = await fetch(`${getBaseUrl()}/api/apps/deploy-git`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, name, command, token })
-        });
-        const data = await res.json();
-        if (data.error) {
+        const data = await apiCall('/api/apps/deploy-git', 'POST', { url, name, command, token });
+        if (data && data.error) {
           showDeployStatus(`Ошибка деплоя: ${data.error}`, 'error');
         } else {
           showDeployStatus(`✓ Приложение '${name}' успешно развернуто и запущено! (PID: ${data.pid || '--'})`, 'success');
@@ -795,13 +1010,8 @@ if (btnDeployApp) {
 
       showDeployStatus(`Загрузка архива и запуск приложения '${name}'...`, 'loading');
       try {
-        const res = await fetch(`${getBaseUrl()}/api/apps/deploy-zip`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, zip_base64: chosenZipBase64, command })
-        });
-        const data = await res.json();
-        if (data.error) {
+        const data = await apiCall('/api/apps/deploy-zip', 'POST', { name, zip_base64: chosenZipBase64, command });
+        if (data && data.error) {
           showDeployStatus(`Ошибка деплоя: ${data.error}`, 'error');
         } else {
           showDeployStatus(`✓ Приложение '${name}' успешно развернуто и запущено! (PID: ${data.pid || '--'})`, 'success');
@@ -821,10 +1031,8 @@ if (btnRefreshApps) {
 async function loadAppsList() {
   if (!appsListGrid) return;
   try {
-    const res = await fetch(`${getBaseUrl()}/api/apps`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const apps = data.apps || [];
+    const data = await apiCall('/api/apps');
+    const apps = (data && data.apps) ? data.apps : [];
 
     if (apps.length === 0) {
       appsListGrid.innerHTML = `
@@ -888,11 +1096,7 @@ async function loadAppsList() {
     appsListGrid.querySelectorAll('.btn-stop-app').forEach(btn => {
       btn.addEventListener('click', async () => {
         btn.textContent = '...';
-        await fetch(`${getBaseUrl()}/api/apps/stop`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: btn.dataset.name })
-        });
+        await apiCall('/api/apps/stop', 'POST', { name: btn.dataset.name });
         loadAppsList();
       });
     });
@@ -900,11 +1104,7 @@ async function loadAppsList() {
     appsListGrid.querySelectorAll('.btn-start-app').forEach(btn => {
       btn.addEventListener('click', async () => {
         btn.textContent = '...';
-        await fetch(`${getBaseUrl()}/api/apps/start`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: btn.dataset.name })
-        });
+        await apiCall('/api/apps/start', 'POST', { name: btn.dataset.name });
         loadAppsList();
       });
     });
@@ -913,11 +1113,7 @@ async function loadAppsList() {
       btn.addEventListener('click', async () => {
         if (confirm(`Удалить приложение '${btn.dataset.name}' и все его файлы из /sdcard/ServerApps?`)) {
           btn.textContent = '...';
-          await fetch(`${getBaseUrl()}/api/apps/delete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: btn.dataset.name })
-          });
+          await apiCall('/api/apps/delete', 'POST', { name: btn.dataset.name });
           loadAppsList();
         }
       });
@@ -941,9 +1137,8 @@ async function openAppLogsModal(appName) {
   modalAppLogs.classList.remove('hidden');
 
   try {
-    const res = await fetch(`${getBaseUrl()}/api/apps/logs?name=${encodeURIComponent(appName)}`);
-    const data = await res.json();
-    modalAppLogBody.textContent = data.logs || 'Логи пусты';
+    const data = await apiCall(`/api/apps/logs?name=${encodeURIComponent(appName)}`, 'GET', { name: appName });
+    modalAppLogBody.textContent = (data && data.logs) ? data.logs : 'Логи пусты';
     modalAppLogBody.scrollTop = modalAppLogBody.scrollHeight;
   } catch (err) {
     modalAppLogBody.textContent = `Ошибка получения логов: ${err.message}`;
@@ -986,9 +1181,9 @@ async function autoScanBonjour() {
 autoScanBonjour();
 setInterval(autoScanBonjour, 10000);
 
-// Фоновая проверка восстановления USB-кабеля (если работаем по Wi-Fi)
+// Фоновая проверка восстановления USB-кабеля (если работаем по Wi-Fi или Облаку)
 async function checkUsbReconnection() {
-  if (activeChannel !== 'wifi') return;
+  if (activeChannel !== 'wifi' && activeChannel !== 'cloud') return;
   try {
     if (window.electronAPI && typeof window.electronAPI.forwardAdb === 'function') {
       const fwd = await window.electronAPI.forwardAdb(serverPort);
