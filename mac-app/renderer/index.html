@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Android Autonomous Server Controller</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Window Drag Header -->
+  <header class="app-header">
+    <div class="drag-region">
+      <div class="brand">
+        <span class="pixel-icon">👾</span>
+        <span class="brand-title">NODE // CONTROLLER</span>
+        <span class="brand-tag">CLAUDE-THEMED</span>
+      </div>
+      <div class="status-cluster">
+        <div id="connBadge" class="badge badge-offline">● CONNECTING...</div>
+        <div id="latencyBadge" class="badge badge-dim">PING: --ms</div>
+        <div id="batteryBadge" class="badge badge-dim">🔋 --%</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+      <div class="device-mini-card">
+        <div class="pixel-rack-art">
+          <div class="rack-unit">
+            <span class="led led-green" id="rackLed1"></span>
+            <span class="rack-text">TABLET-ARM64</span>
+            <span class="led led-orange" id="rackLed2"></span>
+          </div>
+          <div class="rack-unit sub">
+            <span class="led led-green" id="rackLed3"></span>
+            <span class="rack-text" id="rackModelText">Redmi Pad SE</span>
+          </div>
+        </div>
+      </div>
+
+      <ul class="nav-menu">
+        <li class="nav-item active" data-tab="telemetry">
+          <span class="nav-num">01</span>
+          <span class="nav-label">TELEMETRY</span>
+        </li>
+        <li class="nav-item" data-tab="terminal">
+          <span class="nav-num">02</span>
+          <span class="nav-label">TERMINAL</span>
+        </li>
+        <li class="nav-item" data-tab="files">
+          <span class="nav-num">03</span>
+          <span class="nav-label">FILES</span>
+        </li>
+        <li class="nav-item" data-tab="power">
+          <span class="nav-num">04</span>
+          <span class="nav-label">POWER &amp; ECO</span>
+        </li>
+        <li class="nav-item" data-tab="settings">
+          <span class="nav-num">05</span>
+          <span class="nav-label">CONNECTION</span>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <button id="btnAdbTunnel" class="btn-pixel-secondary">
+          ⚡ USB ADB TUNNEL
+        </button>
+        <div class="version-label">v1.0.0 :: 24/7 AUTONOMOUS</div>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="content-viewport">
+
+      <!-- TAB 1: TELEMETRY -->
+      <section id="tab-telemetry" class="tab-pane active">
+        <div class="pane-header">
+          <h2>[ SYSTEM TELEMETRY ]</h2>
+          <span class="header-desc">Real-time hardware &amp; server state</span>
+        </div>
+
+        <div class="cards-grid">
+          <!-- Server Status Card -->
+          <div class="pixel-card">
+            <div class="card-title">SERVER STATE</div>
+            <div class="metric-row">
+              <span class="metric-label">Daemon:</span>
+              <span class="metric-val highlight-green" id="valDaemonStatus">Online</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Uptime:</span>
+              <span class="metric-val" id="valUptime">0h 0m 0s</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Device Uptime:</span>
+              <span class="metric-val" id="valSysUptime">--</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Active Host:</span>
+              <span class="metric-val code-text" id="valActiveHost">http://127.0.0.1:8080</span>
+            </div>
+          </div>
+
+          <!-- Battery & Thermal Card -->
+          <div class="pixel-card">
+            <div class="card-title">BATTERY &amp; THERMAL</div>
+            <div class="battery-bar-container">
+              <div class="bar-label">
+                <span>CHARGE LEVEL</span>
+                <span id="valBatteryPercent" class="metric-val">--%</span>
+              </div>
+              <div class="pixel-progress-bar">
+                <div id="barBatteryFill" class="progress-fill" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="metric-row" style="margin-top: 12px;">
+              <span class="metric-label">Temperature:</span>
+              <span class="metric-val" id="valBatteryTemp">--°C</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Power Source:</span>
+              <span class="metric-val" id="valBatteryPlugged">--</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Battery Health:</span>
+              <span class="metric-val" id="valBatteryHealth">Good</span>
+            </div>
+            <div id="thermalAlert" class="alert-box-pixel hidden">
+              ⚠️ WARNING: Battery above 40°C! Consider cooling.
+            </div>
+          </div>
+
+          <!-- Memory & Storage Card -->
+          <div class="pixel-card">
+            <div class="card-title">MEMORY (RAM)</div>
+            <div class="battery-bar-container">
+              <div class="bar-label">
+                <span>USAGE</span>
+                <span id="valRamText" class="metric-val">-- / -- GB (--%)</span>
+              </div>
+              <div class="pixel-progress-bar">
+                <div id="barRamFill" class="progress-fill fill-ram" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="card-title" style="margin-top: 16px;">STORAGE (/SDCARD)</div>
+            <div class="battery-bar-container">
+              <div class="bar-label">
+                <span>INTERNAL DISK</span>
+                <span id="valDiskText" class="metric-val">-- / -- GB</span>
+              </div>
+              <div class="pixel-progress-bar">
+                <div id="barDiskFill" class="progress-fill fill-disk" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Device Hardware Card -->
+          <div class="pixel-card">
+            <div class="card-title">HARDWARE IDENTITY</div>
+            <div class="metric-row">
+              <span class="metric-label">Model:</span>
+              <span class="metric-val" id="valDeviceModel">--</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Android OS:</span>
+              <span class="metric-val" id="valDeviceOs">--</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">CPU Cores:</span>
+              <span class="metric-val" id="valDeviceCores">-- Cores</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Architecture:</span>
+              <span class="metric-val code-text" id="valDeviceArch">--</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: TERMINAL -->
+      <section id="tab-terminal" class="tab-pane">
+        <div class="pane-header flex-between">
+          <div>
+            <h2>[ REMOTE SHELL // CLAUDE STYLE ]</h2>
+            <span class="header-desc">Direct execution on Android tablet shell</span>
+          </div>
+          <div class="quick-btns">
+            <button class="btn-chip" data-cmd="uname -a">uname</button>
+            <button class="btn-chip" data-cmd="df -h">df -h</button>
+            <button class="btn-chip" data-cmd="cat /proc/cpuinfo | grep 'model name' | head -n 4">cpuinfo</button>
+            <button class="btn-chip" data-cmd="ip a">ip a</button>
+            <button class="btn-chip" data-cmd="top -n 1 -b | head -n 12">top</button>
+          </div>
+        </div>
+
+        <div class="terminal-container">
+          <div class="terminal-body" id="termOutput">
+            <div class="term-line term-system">Welcome to Android Server Remote Console [Claude Edition]</div>
+            <div class="term-line term-system">Connected to remote node over HTTP/JSON RPC. Type commands below.</div>
+          </div>
+          <div class="terminal-input-bar">
+            <span class="prompt-prefix">android-node:$</span>
+            <input type="text" id="termInput" placeholder="Enter shell command (e.g. ls -la /sdcard)..." autocomplete="off" spellcheck="false" />
+            <button id="btnSendCmd" class="btn-pixel">RUN [↵]</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: FILES -->
+      <section id="tab-files" class="tab-pane">
+        <div class="pane-header flex-between">
+          <div>
+            <h2>[ FILE BROWSER ]</h2>
+            <span class="header-desc">Remote filesystem access on tablet</span>
+          </div>
+          <div class="path-nav">
+            <span id="currentDirPath" class="code-text">/sdcard</span>
+            <button id="btnNavUp" class="btn-pixel-secondary">▲ UP</button>
+            <button id="btnRefreshFiles" class="btn-pixel-secondary">↻ REFRESH</button>
+          </div>
+        </div>
+
+        <div class="file-table-container">
+          <table class="file-table">
+            <thead>
+              <tr>
+                <th>TYPE</th>
+                <th>NAME</th>
+                <th>SIZE</th>
+                <th>MODIFIED</th>
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody id="fileTableBody">
+              <tr>
+                <td colspan="5" class="text-center">Loading files from tablet...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 4: POWER & ECO -->
+      <section id="tab-power" class="tab-pane">
+        <div class="pane-header">
+          <h2>[ 24/7 POWER &amp; BATTERY PROTECTION ]</h2>
+          <span class="header-desc">Longevity guidelines and battery swelling prevention</span>
+        </div>
+
+        <div class="cards-grid">
+          <div class="pixel-card">
+            <div class="card-title">SMART BATTERY PRESERVATION</div>
+            <p class="eco-p">
+              Keeping a tablet plugged into a charger 24/7 at 100% causes lithium battery degradation and swelling within 6-12 months.
+            </p>
+            <div class="eco-rule">
+              <span class="pixel-check">✔</span>
+              <span><strong>Optimal Range:</strong> Keep battery between <strong>20% and 80%</strong>.</span>
+            </div>
+            <div class="eco-rule">
+              <span class="pixel-check">✔</span>
+              <span><strong>Smart Plug Webhook:</strong> Use Home Assistant or Tuya smart plug to cut power at 80% and resume at 25%.</span>
+            </div>
+            <div class="eco-rule">
+              <span class="pixel-check">✔</span>
+              <span><strong>Screen Burn-in Protection:</strong> Use the OLED Dim feature on the tablet to cut display draw by 95%.</span>
+            </div>
+          </div>
+
+          <div class="pixel-card">
+            <div class="card-title">REMOTE SCREEN ACTIONS</div>
+            <p class="eco-p">
+              Trigger display state on tablet remotely to conserve power without interrupting server processes:
+            </p>
+            <div class="action-btn-row">
+              <button id="btnDimRemote" class="btn-pixel-secondary">DIM TABLET SCREEN</button>
+              <button id="btnWakeRemote" class="btn-pixel-secondary">WAKE TABLET SCREEN</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: CONNECTION SETTINGS -->
+      <section id="tab-settings" class="tab-pane">
+        <div class="pane-header">
+          <h2>[ CONNECTION CONFIGURATION ]</h2>
+          <span class="header-desc">Switch between Wi-Fi and USB Cable tunnel</span>
+        </div>
+
+        <div class="pixel-card max-w-600">
+          <div class="card-title">TARGET NODE ADDRESS</div>
+          <div class="form-group">
+            <label>Server IP / Host:</label>
+            <div class="input-with-button">
+              <input type="text" id="inputHost" value="127.0.0.1" placeholder="192.168.0.82 or 127.0.0.1" />
+              <input type="number" id="inputPort" value="8080" style="width: 100px;" />
+            </div>
+          </div>
+
+          <div class="quick-preset-row">
+            <span>PRESETS:</span>
+            <button class="btn-chip" id="presetUsb">USB ADB (127.0.0.1:8080)</button>
+            <button class="btn-chip" id="presetWifi">Tablet Wi-Fi (192.168.0.82:8080)</button>
+          </div>
+
+          <div class="form-group" style="margin-top: 18px;">
+            <button id="btnSaveConnect" class="btn-pixel">SAVE &amp; RECONNECT</button>
+          </div>
+
+          <div class="card-title" style="margin-top: 24px;">ADB STATUS</div>
+          <pre id="adbOutput" class="adb-box">Checking ADB devices...</pre>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

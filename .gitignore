@@ -1,0 +1,19 @@
+# Build directories
+.tools/
+.gradle/
+build/
+*/build/
+*.apk
+*.aab
+
+# Node / Electron
+node_modules/
+mac-app/node_modules/
+npm-debug.log*
+
+# Android / Local
+local.properties
+android-app/local.properties
+.idea/
+*.iml
+.DS_Store
