@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg_main">#181816</color>
-    <color name="bg_surface">#22211E</color>
-    <color name="bg_surface_alt">#2A2824</color>
-    <color name="border">#3A3731</color>
-    <color name="accent_claude">#D97757</color>
-    <color name="accent_claude_light">#E28768</color>
-    <color name="text_primary">#F4EFEA</color>
-    <color name="text_secondary">#969186</color>
-    <color name="status_green">#6EA378</color>
-    <color name="status_yellow">#E5AC44</color>
-    <color name="status_red">#D95B5B</color>
-    <color name="terminal_black">#121210</color>
+    <color name="bg_main">#0A0C14</color>
+    <color name="bg_surface">#111422</color>
+    <color name="bg_surface_alt">#181D30</color>
+    <color name="border">#232A45</color>
+    <color name="accent_antigravity">#00F0FF</color>
+    <color name="accent_antigravity_purple">#A855F7</color>
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="status_green">#00FF9D</color>
+    <color name="status_yellow">#FFB800</color>
+    <color name="status_red">#FF3366</color>
+    <color name="terminal_black">#06080D</color>
 </resources>
