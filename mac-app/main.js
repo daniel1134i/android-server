@@ -298,6 +298,7 @@ function discoverViaArpAndScan() {
 ipcMain.handle('pairing:auto-pair', async () => {
   // Стратегия 1: Мгновенная проверка USB ADB туннеля (если подключен по кабелю)
   try {
+    await new Promise((resolve) => exec('adb forward tcp:8080 tcp:8080', () => resolve()));
     const usbPair = await probeHttpPair('127.0.0.1', 8080, 800);
     if (usbPair) {
       return {

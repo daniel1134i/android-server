@@ -923,6 +923,11 @@ if (btnFactoryReset) {
     }
 
     try {
+      // 0. Если есть доступ к ADB, гарантированно пробрасываем USB-порт перед отправкой
+      if (window.electronAPI && typeof window.electronAPI.forwardAdb === 'function') {
+        try { await window.electronAPI.forwardAdb(serverPort || 8080); } catch (_) {}
+      }
+
       // 1. Отправляем /api/reset на Android планшет по всем доступным каналам параллельно
       const resetPromises = [];
 
@@ -966,7 +971,17 @@ if (btnFactoryReset) {
       }
 
       // Дожидаемся результатов отправки сброса на планшет
-      await Promise.allSettled(resetPromises);
+      const resetResults = await Promise.allSettled(resetPromises);
+      let tabletResetConfirmed = false;
+      let newTabletNodeId = '';
+
+      for (const res of resetResults) {
+        if (res.status === 'fulfilled' && res.value && (res.value.status === 'reset_ok' || res.value.node_id)) {
+          tabletResetConfirmed = true;
+          if (res.value.node_id) newTabletNodeId = res.value.node_id;
+          break;
+        }
+      }
 
       if (txtFactoryResetStatus) {
         txtFactoryResetStatus.textContent = 'Очистка локальных данных Mac контроллера...';
@@ -1048,11 +1063,16 @@ if (btnFactoryReset) {
       if (barDiskFill) barDiskFill.style.width = '0%';
 
       if (txtFactoryResetStatus) {
-        txtFactoryResetStatus.textContent = '✓ Полный сброс выполнен! Планшет и Mac возвращены к заводским настройкам.';
-        txtFactoryResetStatus.style.color = 'var(--agy-green)';
+        if (tabletResetConfirmed) {
+          txtFactoryResetStatus.textContent = `✓ Полный сброс выполнен! Планшет подтвердил сброс${newTabletNodeId ? ` (Новый ID: ${newTabletNodeId})` : ''}.`;
+          txtFactoryResetStatus.style.color = 'var(--agy-green)';
+        } else {
+          txtFactoryResetStatus.innerHTML = '⚠️ <b>Настройки Mac сброшены, но планшет не ответил!</b><br>Планшет не был на связи по проводу или сети. Подключите провод Type-C и нажмите кнопку еще раз, либо очистите данные в настройках планшета.';
+          txtFactoryResetStatus.style.color = 'var(--agy-coral)';
+        }
         setTimeout(() => {
           if (txtFactoryResetStatus) txtFactoryResetStatus.textContent = '';
-        }, 6000);
+        }, 10000);
       }
     } catch (err) {
       if (txtFactoryResetStatus) {
