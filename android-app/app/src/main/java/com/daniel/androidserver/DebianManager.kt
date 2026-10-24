@@ -105,7 +105,13 @@ object DebianManager {
         }
     }
 
-    fun installDebianAsync(customUrl: String? = null): Boolean {
+    fun installDebianAsync(customUrl: String? = null, force: Boolean = false): Boolean {
+        if (!force && customUrl.isNullOrBlank() && isInstalled()) {
+            currentStage = "ready"
+            statusMessage = "Debian 12 (Bookworm) готов к работе"
+            ServerService.addLog("[DEBIAN] Подсистема Debian 12 уже установлена и готова к работе", "DEBIAN")
+            return false
+        }
         if (!isInstalling.compareAndSet(false, true)) {
             return false
         }

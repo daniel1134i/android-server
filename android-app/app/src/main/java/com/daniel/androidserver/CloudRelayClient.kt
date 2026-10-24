@@ -349,11 +349,12 @@ class CloudRelayClient(
 
                 path == "/api/debian/install" && method == "POST" -> {
                     val customUrl = bodyJson.optString("url", "").ifEmpty { null }
-                    val started = DebianManager.installDebianAsync(customUrl)
+                    val force = bodyJson.optBoolean("force", false)
+                    val started = DebianManager.installDebianAsync(customUrl, force)
                     JSONObject().apply {
-                        put("status", if (started) "started" else "busy")
+                        put("status", if (started) "started" else if (DebianManager.isInstalled() && !force) "already_installed" else "busy")
                         put("installing", DebianManager.isInstalling.get())
-                        put("message", if (started) "Установка Debian 12 запущена в фоновом режиме" else "Установка уже выполняется")
+                        put("message", if (started) "Установка Debian 12 запущена в фоновом режиме" else if (DebianManager.isInstalled() && !force) "Debian 12 уже готов к работе" else "Установка уже выполняется")
                     }
                 }
 

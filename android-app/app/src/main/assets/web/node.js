@@ -327,14 +327,20 @@ async function pollStatus() {
         txtDebianTitle.style.color = '#94c55f';
       }
       if (txtDebianSub) {
-        txtDebianSub.textContent = 'PRoot эмуляция активна. Все приложения и терминальные команды выполняются в Linux-окружении';
+        txtDebianSub.textContent = 'PRoot эмуляция активна. Все серверные приложения и терминал работают в Linux-окружении';
       }
       if (btnInstallDebian) {
-        btnInstallDebian.disabled = false;
-        btnInstallDebian.className = 'btn-node btn-sub';
-        btnInstallDebian.style.background = 'rgba(112, 110, 200, 0.2)';
-        btnInstallDebian.innerHTML = '<span class="btn-icon">✓</span> DEBIAN 12 ГОТОВ';
+        btnInstallDebian.disabled = true;
+        btnInstallDebian.className = 'btn-node';
+        btnInstallDebian.style.background = 'rgba(131, 179, 104, 0.15)';
+        btnInstallDebian.style.border = '1px solid var(--agy-green)';
+        btnInstallDebian.style.color = '#94c55f';
+        btnInstallDebian.style.cursor = 'default';
+        btnInstallDebian.style.pointerEvents = 'none';
+        btnInstallDebian.innerHTML = '<span class="btn-icon">✓</span> ПОДСИСТЕМА АКТИВНА';
       }
+      const linkReinstall = document.getElementById('linkReinstallDebian');
+      if (linkReinstall) linkReinstall.classList.remove('hidden');
     } else {
       if (boxDebianProgress) boxDebianProgress.classList.add('hidden');
       if (pulseDebian) {
@@ -356,8 +362,14 @@ async function pollStatus() {
         btnInstallDebian.disabled = false;
         btnInstallDebian.className = 'btn-node';
         btnInstallDebian.style.background = 'var(--agy-violet)';
+        btnInstallDebian.style.border = '1px solid #9c99ec';
+        btnInstallDebian.style.color = '#fff';
+        btnInstallDebian.style.cursor = 'pointer';
+        btnInstallDebian.style.pointerEvents = 'auto';
         btnInstallDebian.innerHTML = '<span class="btn-icon">⚡</span> УСТАНОВИТЬ DEBIAN 12';
       }
+      const linkReinstall = document.getElementById('linkReinstallDebian');
+      if (linkReinstall) linkReinstall.classList.add('hidden');
     }
 
     // Счетчик приложений на чипе
@@ -783,15 +795,42 @@ if (btnClearLogs) {
 const btnInstallDebianGlobal = document.getElementById('btnInstallDebian');
 if (btnInstallDebianGlobal) {
   btnInstallDebianGlobal.addEventListener('click', async () => {
+    if (btnInstallDebianGlobal.disabled || btnInstallDebianGlobal.textContent.includes('АКТИВНА') || btnInstallDebianGlobal.textContent.includes('ГОТОВ')) {
+      return;
+    }
     try {
       btnInstallDebianGlobal.disabled = true;
       btnInstallDebianGlobal.textContent = 'Запуск установки...';
       const res = await fetch('/api/debian/install', { method: 'POST' });
       const data = await res.json();
+      if (data.status === 'already_installed') {
+        pollStatus();
+        return;
+      }
       appendLogEntry('Запрос на установку Debian 12 отправлен на хост-ноду', 'DEBIAN');
       pollStatus();
     } catch (e) {
       alert('Ошибка запуска установки Debian: ' + e.message);
+    }
+  });
+}
+
+const linkReinstallDebianGlobal = document.getElementById('linkReinstallDebian');
+if (linkReinstallDebianGlobal) {
+  linkReinstallDebianGlobal.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (confirm('Внимание! Debian 12 уже установлен. Вы действительно хотите переустановить Linux-подсистему заново?')) {
+      try {
+        appendLogEntry('Запуск переустановки Debian 12...', 'DEBIAN');
+        await fetch('/api/debian/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: true })
+        });
+        pollStatus();
+      } catch (err) {
+        alert('Ошибка: ' + err.message);
+      }
     }
   });
 }

@@ -319,11 +319,12 @@ class HttpServer(
                 uriPath == "/api/debian/install" && method == "POST" -> {
                     val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
                     val customUrl = reqJson.optString("url", "").trim().ifEmpty { null }
-                    val started = DebianManager.installDebianAsync(customUrl)
+                    val force = reqJson.optBoolean("force", false)
+                    val started = DebianManager.installDebianAsync(customUrl, force)
                     val resp = JSONObject().apply {
-                        put("status", if (started) "started" else "busy")
+                        put("status", if (started) "started" else if (DebianManager.isInstalled() && !force) "already_installed" else "busy")
                         put("installing", DebianManager.isInstalling.get())
-                        put("message", if (started) "Установка Debian 12 запущена в фоновом режиме" else "Установка уже выполняется")
+                        put("message", if (started) "Установка Debian 12 запущена в фоновом режиме" else if (DebianManager.isInstalled() && !force) "Debian 12 уже готов к работе" else "Установка уже выполняется")
                     }
                     sendJsonResponse(output, 200, resp)
                 }
