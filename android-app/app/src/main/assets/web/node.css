@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url('PixelifySans-Bold.ttf') format('truetype');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg-main: #191a1b;
   --bg-surface: #222426;
@@ -19,7 +27,7 @@
   --text-dim: #5f6368;
 
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, monospace;
-  --font-pixel: 'Silkscreen', 'Press Start 2P', monospace;
+  --font-pixel: 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace;
 }
 
 * {
