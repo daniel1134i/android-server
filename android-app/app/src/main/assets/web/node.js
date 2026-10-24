@@ -641,15 +641,46 @@ async function loadAppsList() {
     });
 
     appsListGrid.querySelectorAll('.btn-del-app').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         const name = btn.dataset.name;
-        if (confirm(`Удалить приложение '${name}' и все его файлы?`)) {
-          btn.textContent = '...';
-          await fetch('/api/apps/delete', {
+        if (btn.dataset.confirming !== 'true') {
+          btn.dataset.confirming = 'true';
+          const originalText = btn.textContent;
+          btn.textContent = 'ТОЧНО УДАЛИТЬ?';
+          btn.style.background = 'var(--agy-coral)';
+          btn.style.color = '#fff';
+          btn.style.borderColor = 'var(--agy-coral)';
+
+          btn._resetTimeout = setTimeout(() => {
+            btn.dataset.confirming = 'false';
+            btn.textContent = originalText;
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.style.borderColor = '';
+          }, 4000);
+          return;
+        }
+
+        // Второе нажатие - подтверждено!
+        clearTimeout(btn._resetTimeout);
+        btn.disabled = true;
+        btn.textContent = '⏳ УДАЛЕНИЕ...';
+        try {
+          const resp = await fetch('/api/apps/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
           });
+          const res = await resp.json();
+          if (res.status === 'ok') {
+            loadAppsList();
+          } else {
+            alert('Не удалось удалить приложение: ' + (res.error || 'ошибка удаления'));
+            loadAppsList();
+          }
+        } catch (err) {
+          alert('Ошибка при удалении: ' + err.message);
           loadAppsList();
         }
       });

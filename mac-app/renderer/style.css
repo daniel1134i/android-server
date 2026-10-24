@@ -74,7 +74,15 @@ body {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, #4d82f1 0%, #6fb686 25%, #e89646 50%, #df6347 75%, #706ec8 100%);
+  background: linear-gradient(90deg, #423189 0%, #5276D1 50%, #423189 100%);
+  background-size: 200% 100%;
+  animation: stripShift 4s ease infinite;
+}
+
+@keyframes stripShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .drag-region {
@@ -97,10 +105,19 @@ body {
 }
 
 .brand-title {
+  display: inline-flex;
+  align-items: center;
   font-family: var(--font-pixel);
   font-size: 13px;
   color: var(--text-main);
   letter-spacing: 0.5px;
+}
+
+.brand-server-text {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--text-main);
+  letter-spacing: 1px;
 }
 
 .brand-title .highlight {

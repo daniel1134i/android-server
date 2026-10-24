@@ -39,6 +39,7 @@ class CloudRelayClient(
 
     private val handler = Handler(Looper.getMainLooper())
     private var reconnectAttempts = 0
+    private var hasLoggedDisconnect = false
     private val rpcExecutor = java.util.concurrent.Executors.newFixedThreadPool(6)
 
     init {
@@ -120,11 +121,14 @@ class CloudRelayClient(
                 .url(relayUrl)
                 .build()
 
-            logCallback("[ОБЛАКО] Подключение к Relay: $relayUrl (Node ID: $nodeId)...")
+            if (reconnectAttempts == 0) {
+                logCallback("[ОБЛАКО] Подключение к Relay: $relayUrl (Node ID: $nodeId)...")
+            }
 
             webSocket = okHttpClient?.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
                     reconnectAttempts = 0
+                    hasLoggedDisconnect = false
                     // Отправка регистрационного хэндшейка
                     val regMsg = JSONObject().apply {
                         put("type", "register")
@@ -141,19 +145,32 @@ class CloudRelayClient(
                 }
 
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    val wasConnected = isConnected
                     isConnected = false
-                    logCallback("[ОБЛАКО] Соединение закрыто: $reason")
+                    if (wasConnected && !hasLoggedDisconnect) {
+                        hasLoggedDisconnect = true
+                        logCallback("[ОБЛАКО] Сессия контроллера Mac завершена. Фоновое ожидание...")
+                    }
                     scheduleReconnect()
                 }
 
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    val wasConnected = isConnected
                     isConnected = false
-                    logCallback("[ОБЛАКО] Ошибка соединения: ${t.message}")
+                    if (wasConnected && !hasLoggedDisconnect) {
+                        hasLoggedDisconnect = true
+                        logCallback("[ОБЛАКО] Контроллер Mac отключился. Сервер продолжает автономную работу.")
+                    }
                     scheduleReconnect()
                 }
             })
         } catch (e: Exception) {
-            logCallback("[ОБЛАКО] Исключение при подключении: ${e.message}")
+            val wasConnected = isConnected
+            isConnected = false
+            if (wasConnected && !hasLoggedDisconnect) {
+                hasLoggedDisconnect = true
+                logCallback("[ОБЛАКО] Контроллер Mac отключился. Сервер продолжает автономную работу.")
+            }
             scheduleReconnect()
         }
     }
@@ -173,6 +190,7 @@ class CloudRelayClient(
 
             if (json.optString("type") == "registered") {
                 isConnected = true
+                hasLoggedDisconnect = false
                 logCallback("[ОБЛАКО] ✓ Успешно зарегистрирован в Cloud Relay (ID: $nodeId). Ожидание контроллера...")
                 return
             }

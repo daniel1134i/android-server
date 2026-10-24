@@ -206,9 +206,23 @@ object AppManager {
         val clean = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
         stopApp(clean)
         val dir = File(appsDir, clean)
-        val ok = dir.deleteRecursively()
+        if (!dir.exists()) return true
+
+        try { Thread.sleep(100) } catch (_: Exception) {}
+
+        var ok = dir.deleteRecursively()
+        if (!ok || dir.exists()) {
+            try {
+                val proc = Runtime.getRuntime().exec(arrayOf("rm", "-rf", dir.absolutePath))
+                proc.waitFor()
+                ok = !dir.exists()
+            } catch (_: Exception) {}
+        }
+
         if (ok) {
             ServerService.addLog("Приложение '$clean' удалено из /sdcard/ServerApps", "ПРИЛОЖЕНИЯ")
+        } else {
+            ServerService.addLog("Ошибка при удалении приложения '$clean'", "ОШИБКА")
         }
         return ok
     }
