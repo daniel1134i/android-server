@@ -107,6 +107,7 @@ class HttpServer(
 
             // Фильтруем технический шум фонового поллинга (телеметрия, логи, список приложений, статика)
             val isRoutinePolling = uriPath == "/api/status" ||
+                                  uriPath == "/api/debian/status" ||
                                   uriPath == "/api/logs" ||
                                   uriPath == "/api/apps" ||
                                   uriPath == "/api/ping" ||
@@ -310,13 +311,40 @@ class HttpServer(
                     sendJsonResponse(output, 200, JSONObject().put("status", "ok").put("screen", "on"))
                 }
 
+                uriPath == "/api/debian/status" -> {
+                    val resp = DebianManager.getInstallationStatus()
+                    sendJsonResponse(output, 200, resp)
+                }
+
+                uriPath == "/api/debian/install" && method == "POST" -> {
+                    val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
+                    val customUrl = reqJson.optString("url", "").trim().ifEmpty { null }
+                    val started = DebianManager.installDebianAsync(customUrl)
+                    val resp = JSONObject().apply {
+                        put("status", if (started) "started" else "busy")
+                        put("installing", DebianManager.isInstalling.get())
+                        put("message", if (started) "Установка Debian 12 запущена в фоновом режиме" else "Установка уже выполняется")
+                    }
+                    sendJsonResponse(output, 200, resp)
+                }
+
+                uriPath == "/api/debian/uninstall" && method == "POST" -> {
+                    val ok = DebianManager.uninstall()
+                    val resp = JSONObject().apply {
+                        put("status", if (ok) "ok" else "error")
+                        put("message", if (ok) "Debian 12 rootfs успешно удален" else "Не удалось удалить (возможно, идет процесс установки)")
+                    }
+                    sendJsonResponse(output, 200, resp)
+                }
+
                 uriPath == "/api/exec" && method == "POST" -> {
                     val reqJson = try { JSONObject(bodyBuilder.toString()) } catch (_: Exception) { JSONObject() }
                     val command = reqJson.optString("command", "").trim()
+                    val forceProot = if (reqJson.has("proot")) reqJson.optBoolean("proot") else DebianManager.isInstalled()
                     if (command.isEmpty()) {
                         sendJsonResponse(output, 400, JSONObject().put("error", "No command provided"))
                     } else {
-                        val result = executeShell(command)
+                        val result = executeShell(command, useProot = forceProot)
                         sendJsonResponse(output, 200, result)
                     }
                 }
@@ -417,11 +445,27 @@ class HttpServer(
         return map
     }
 
-    private fun executeShell(command: String): JSONObject {
+    private fun executeShell(command: String, useProot: Boolean = false): JSONObject {
         val result = JSONObject()
         val start = System.currentTimeMillis()
+        val actualUseProot = useProot && DebianManager.isInstalled()
         try {
-            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+            val pb = if (actualUseProot) {
+                val prootCmd = DebianManager.buildProotCommand(command, workDir = "/apps")
+                ProcessBuilder(prootCmd).apply {
+                    DebianManager.applyEnvironment(environment())
+                }
+            } else {
+                ProcessBuilder("sh", "-c", command).apply {
+                    val env = environment()
+                    env["HOME"] = context.filesDir.absolutePath
+                    env["TMPDIR"] = context.cacheDir.absolutePath
+                    env["PATH"] = "/system/bin:/system/xbin:" + (env["PATH"] ?: "")
+                }
+            }
+            pb.redirectErrorStream(false)
+            val process = pb.start()
+
             var stdout = ""
             var stderr = ""
             val outThread = Thread {
@@ -434,23 +478,25 @@ class HttpServer(
             errThread.start()
 
             val finished = try {
-                process.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)
+                process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)
             } catch (_: Exception) { false }
 
             if (!finished) {
                 try { process.destroyForcibly() } catch (_: Exception) {}
-                stderr += "\n[ТАЙМАУТ: процесс принудительно остановлен через 20 сек]"
+                stderr += "\n[ТАЙМАУТ: процесс принудительно остановлен через 120 сек]"
             }
-            try { outThread.join(500) } catch (_: Exception) {}
-            try { errThread.join(500) } catch (_: Exception) {}
+            try { outThread.join(1000) } catch (_: Exception) {}
+            try { errThread.join(1000) } catch (_: Exception) {}
 
             result.put("command", command)
+            result.put("backend", if (actualUseProot) "debian_proot" else "android_shell")
             result.put("exit_code", if (finished) process.exitValue() else -1)
             result.put("stdout", stdout)
             result.put("stderr", stderr)
             result.put("duration_ms", System.currentTimeMillis() - start)
         } catch (e: Exception) {
             result.put("command", command)
+            result.put("backend", if (actualUseProot) "debian_proot" else "android_shell")
             result.put("exit_code", -1)
             result.put("error", e.message ?: "Execution failed")
         }

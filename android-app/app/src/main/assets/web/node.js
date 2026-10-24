@@ -259,6 +259,85 @@ async function pollStatus() {
       };
     }
 
+    // Подсистема Debian 12 (Bookworm) PRoot
+    const deb = data.debian || {};
+    const txtDebianTitle = document.getElementById('txtDebianTitle');
+    const txtDebianSub = document.getElementById('txtDebianSub');
+    const pulseDebian = document.getElementById('pulseDebian');
+    const btnInstallDebian = document.getElementById('btnInstallDebian');
+    const boxDebianProgress = document.getElementById('boxDebianProgress');
+    const txtDebianStage = document.getElementById('txtDebianStage');
+    const txtDebianPct = document.getElementById('txtDebianPct');
+    const barDebian = document.getElementById('barDebian');
+    const valDebianPath = document.getElementById('valDebianPath');
+    const badgeDebian = document.getElementById('badgeDebian');
+
+    if (deb.debian_dir && valDebianPath) {
+      valDebianPath.textContent = deb.debian_dir;
+    }
+
+    if (deb.installing) {
+      if (boxDebianProgress) boxDebianProgress.classList.remove('hidden');
+      if (barDebian) barDebian.style.width = `${deb.progress || 0}%`;
+      if (txtDebianPct) txtDebianPct.textContent = `${deb.progress || 0}%`;
+      if (txtDebianStage) txtDebianStage.textContent = deb.message || 'Установка...';
+      if (txtDebianSub) txtDebianSub.textContent = deb.message || 'Идет развертывание rootfs...';
+      if (badgeDebian) {
+        badgeDebian.className = 'badge badge-dim';
+        badgeDebian.textContent = `🐧 ЗАГРУЗКА: ${deb.progress || 0}%`;
+      }
+      if (btnInstallDebian) {
+        btnInstallDebian.disabled = true;
+        btnInstallDebian.innerHTML = `<span class="btn-icon">⏳</span> УСТАНОВКА (${deb.progress || 0}%)...`;
+      }
+    } else if (deb.installed) {
+      if (boxDebianProgress) boxDebianProgress.classList.add('hidden');
+      if (pulseDebian) {
+        pulseDebian.style.background = 'var(--agy-green)';
+        pulseDebian.style.boxShadow = '0 0 10px var(--agy-green)';
+      }
+      if (badgeDebian) {
+        badgeDebian.className = 'badge badge-online';
+        badgeDebian.textContent = '🐧 DEBIAN 12: АКТИВЕН';
+      }
+      if (txtDebianTitle) {
+        txtDebianTitle.textContent = '🐧 LINUX DEBIAN 12 (BOOKWORM ARM64) АКТИВЕН';
+        txtDebianTitle.style.color = '#94c55f';
+      }
+      if (txtDebianSub) {
+        txtDebianSub.textContent = 'PRoot эмуляция активна. Все приложения и терминальные команды выполняются в Linux-окружении';
+      }
+      if (btnInstallDebian) {
+        btnInstallDebian.disabled = false;
+        btnInstallDebian.className = 'btn-node btn-sub';
+        btnInstallDebian.style.background = 'rgba(112, 110, 200, 0.2)';
+        btnInstallDebian.innerHTML = '<span class="btn-icon">✓</span> DEBIAN 12 ГОТОВ';
+      }
+    } else {
+      if (boxDebianProgress) boxDebianProgress.classList.add('hidden');
+      if (pulseDebian) {
+        pulseDebian.style.background = 'var(--agy-amber)';
+        pulseDebian.style.boxShadow = '0 0 10px var(--agy-amber)';
+      }
+      if (badgeDebian) {
+        badgeDebian.className = 'badge badge-dim';
+        badgeDebian.textContent = '🐧 DEBIAN 12: НЕТ';
+      }
+      if (txtDebianTitle) {
+        txtDebianTitle.textContent = '🐧 LINUX SUB-SYSTEM: DEBIAN 12 (BOOKWORM)';
+        txtDebianTitle.style.color = 'var(--text-main)';
+      }
+      if (txtDebianSub) {
+        txtDebianSub.textContent = 'Подсистема не развернута. Нажмите кнопку справа для 1-клик установки официального Debian 12';
+      }
+      if (btnInstallDebian) {
+        btnInstallDebian.disabled = false;
+        btnInstallDebian.className = 'btn-node';
+        btnInstallDebian.style.background = 'var(--agy-violet)';
+        btnInstallDebian.innerHTML = '<span class="btn-icon">⚡</span> УСТАНОВИТЬ DEBIAN 12';
+      }
+    }
+
     // Счетчик приложений на чипе
     try {
       const appsRes = await fetch('/api/apps', { cache: 'no-store' });
@@ -645,6 +724,22 @@ if (btnClearLogs) {
       await fetch('/api/logs/clear');
     } catch (_) {}
     appendLogEntry('Отображение логов очищено', 'СИСТЕМА');
+  });
+}
+
+const btnInstallDebianGlobal = document.getElementById('btnInstallDebian');
+if (btnInstallDebianGlobal) {
+  btnInstallDebianGlobal.addEventListener('click', async () => {
+    try {
+      btnInstallDebianGlobal.disabled = true;
+      btnInstallDebianGlobal.textContent = 'Запуск установки...';
+      const res = await fetch('/api/debian/install', { method: 'POST' });
+      const data = await res.json();
+      appendLogEntry('Запрос на установку Debian 12 отправлен на хост-ноду', 'DEBIAN');
+      pollStatus();
+    } catch (e) {
+      alert('Ошибка запуска установки Debian: ' + e.message);
+    }
   });
 }
 

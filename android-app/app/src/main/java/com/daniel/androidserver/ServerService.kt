@@ -85,6 +85,12 @@ class ServerService : Service() {
         batteryMonitor = BatteryMonitor(this).apply { start() }
 
         AppManager.init(this)
+        DebianManager.init(this)
+
+        if (!DebianManager.isInstalled() && !DebianManager.isInstalling.get()) {
+            addLog("[DEBIAN] Автоматическая инициализация Linux-подсистемы Debian 12...", "DEBIAN")
+            DebianManager.installDebianAsync()
+        }
 
         httpServer = HttpServer(
             context = this,

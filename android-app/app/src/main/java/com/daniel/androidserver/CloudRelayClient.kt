@@ -327,9 +327,30 @@ class CloudRelayClient(
                     listFilesRpc(reqPath)
                 }
 
+                path == "/api/debian/status" -> DebianManager.getInstallationStatus()
+
+                path == "/api/debian/install" && method == "POST" -> {
+                    val customUrl = bodyJson.optString("url", "").ifEmpty { null }
+                    val started = DebianManager.installDebianAsync(customUrl)
+                    JSONObject().apply {
+                        put("status", if (started) "started" else "busy")
+                        put("installing", DebianManager.isInstalling.get())
+                        put("message", if (started) "Установка Debian 12 запущена в фоновом режиме" else "Установка уже выполняется")
+                    }
+                }
+
+                path == "/api/debian/uninstall" && method == "POST" -> {
+                    val ok = DebianManager.uninstall()
+                    JSONObject().apply {
+                        put("status", if (ok) "ok" else "error")
+                        put("message", if (ok) "Debian 12 rootfs успешно удален" else "Не удалось удалить rootfs")
+                    }
+                }
+
                 path == "/api/exec" && method == "POST" -> {
                     val cmd = bodyJson.optString("command")
-                    executeShell(cmd)
+                    val useProot = if (bodyJson.has("proot")) bodyJson.optBoolean("proot") else DebianManager.isInstalled()
+                    executeShell(cmd, useProot)
                 }
 
                 else -> JSONObject().put("error", "Эндпоинт не поддерживается в Cloud Relay: $path")
@@ -360,9 +381,25 @@ class CloudRelayClient(
         }
     }
 
-    private fun executeShell(cmd: String): JSONObject {
+    private fun executeShell(cmd: String, useProot: Boolean = false): JSONObject {
         val t0 = System.currentTimeMillis()
-        val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
+        val actualUseProot = useProot && DebianManager.isInstalled()
+        val pb = if (actualUseProot) {
+            val prootCmd = DebianManager.buildProotCommand(cmd, workDir = "/apps")
+            ProcessBuilder(prootCmd).apply {
+                DebianManager.applyEnvironment(environment())
+            }
+        } else {
+            ProcessBuilder("sh", "-c", cmd).apply {
+                val env = environment()
+                env["HOME"] = context.filesDir.absolutePath
+                env["TMPDIR"] = context.cacheDir.absolutePath
+                env["PATH"] = "/system/bin:/system/xbin:" + (env["PATH"] ?: "")
+            }
+        }
+        pb.redirectErrorStream(false)
+        val p = pb.start()
+
         var stdout = ""
         var stderr = ""
         val outThread = Thread {
@@ -375,18 +412,19 @@ class CloudRelayClient(
         errThread.start()
 
         val finished = try {
-            p.waitFor(20, TimeUnit.SECONDS)
+            p.waitFor(120, TimeUnit.SECONDS)
         } catch (_: Exception) { false }
 
         if (!finished) {
             try { p.destroyForcibly() } catch (_: Exception) {}
-            stderr += "\n[ТАЙМАУТ: процесс принудительно остановлен через 20 сек]"
+            stderr += "\n[ТАЙМАУТ: процесс принудительно остановлен через 120 сек]"
         }
-        try { outThread.join(500) } catch (_: Exception) {}
-        try { errThread.join(500) } catch (_: Exception) {}
+        try { outThread.join(1000) } catch (_: Exception) {}
+        try { errThread.join(1000) } catch (_: Exception) {}
 
         return JSONObject().apply {
             put("command", cmd)
+            put("backend", if (actualUseProot) "debian_proot" else "android_shell")
             put("exit_code", if (finished) p.exitValue() else -1)
             put("stdout", stdout)
             put("stderr", stderr)

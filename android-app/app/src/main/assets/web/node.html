@@ -30,6 +30,7 @@
 
     <div class="header-badges">
       <div id="badgeDaemon" class="badge badge-online">● ДЕМОН: ОНЛАЙН</div>
+      <div id="badgeDebian" class="badge badge-dim">🐧 DEBIAN 12: --</div>
       <div id="badgeWifi" class="badge badge-dim">WI-FI: http://--:8080</div>
       <div id="badgeBattery" class="badge badge-dim">🔋 --%</div>
     </div>
@@ -88,6 +89,48 @@
           <div class="pill-status">
             <span class="pill-dot"></span> WAKELOCK: ЧАСТИЧНЫЙ (АКТИВЕН 24/7)
           </div>
+        </div>
+      </section>
+
+      <!-- Секция Debian 12 Linux Subsystem -->
+      <section class="master-card" id="debianCard" style="margin-top: 14px; border-left: 4px solid var(--agy-violet);">
+        <div class="master-left" style="flex: 1;">
+          <div class="status-indicator-box">
+            <span class="pulse-led" id="pulseDebian" style="background: var(--agy-violet); box-shadow: 0 0 10px var(--agy-violet);"></span>
+            <div>
+              <div class="status-headline" id="txtDebianTitle">🐧 LINUX SUB-SYSTEM: DEBIAN 12 (BOOKWORM ARM64)</div>
+              <div class="status-sub" id="txtDebianSub">Проверка состояния подсистемы Debian PRoot...</div>
+            </div>
+          </div>
+          <!-- Прогресс-бар установки -->
+          <div id="boxDebianProgress" class="hidden" style="margin-top: 10px; margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+              <span id="txtDebianStage">Загрузка rootfs...</span>
+              <span id="txtDebianPct" class="highlight-green">0%</span>
+            </div>
+            <div class="progress-bar" style="height: 6px; background: rgba(0,0,0,0.5);">
+              <div class="progress-fill fill-blue" id="barDebian" style="width: 0%;"></div>
+            </div>
+          </div>
+          <div class="endpoint-badges" style="margin-top: 8px;">
+            <div class="ep-chip">
+              <span class="ep-label">ROOTFS</span>
+              <span class="ep-value" id="valDebianPath">/data/data/com.daniel.androidserver/files/debian</span>
+            </div>
+            <div class="ep-chip">
+              <span class="ep-label">ПРИЛОЖЕНИЯ</span>
+              <span class="ep-value">/apps ➔ /sdcard/ServerApps</span>
+            </div>
+            <div class="ep-chip">
+              <span class="ep-label">PROOT</span>
+              <span class="ep-value" id="valProotStatus">arm64-v8a (PIE)</span>
+            </div>
+          </div>
+        </div>
+        <div class="master-actions" style="margin-left: 16px;">
+          <button id="btnInstallDebian" class="btn-node" style="background: var(--agy-violet); border: 1px solid #9c99ec; color: #fff;">
+            <span class="btn-icon">⚡</span> УСТАНОВИТЬ DEBIAN 12
+          </button>
         </div>
       </section>
 

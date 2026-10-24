@@ -36,6 +36,7 @@ object SystemStats {
                 put("connected", ServerService.cloudRelay?.isConnected == true)
                 put("relay_url", ServerService.cloudRelay?.relayUrl ?: "")
             })
+            put("debian", DebianManager.getInstallationStatus())
         }
     }
 

@@ -114,15 +114,22 @@ object AppManager {
         val logFile = File(dir, "app.log")
 
         return try {
-            val pb = ProcessBuilder("sh", "-c", cmd)
-                .directory(dir)
-                .redirectErrorStream(true)
-
-            val env = pb.environment()
-            env["HOME"] = dir.absolutePath
-            env["TMPDIR"] = dir.absolutePath
-            env["USER"] = "android"
-            env["PATH"] = "${dir.absolutePath}:/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin:" + (env["PATH"] ?: "")
+            val useDebian = DebianManager.isInstalled()
+            val pb = if (useDebian) {
+                val prootArgs = DebianManager.buildProotCommand(cmd, workDir = "/apps/$clean")
+                ProcessBuilder(prootArgs).apply {
+                    DebianManager.applyEnvironment(environment())
+                }
+            } else {
+                ProcessBuilder("sh", "-c", cmd).apply {
+                    val env = environment()
+                    env["HOME"] = dir.absolutePath
+                    env["TMPDIR"] = dir.absolutePath
+                    env["USER"] = "android"
+                    env["PATH"] = "${dir.absolutePath}:/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin:" + (env["PATH"] ?: "")
+                }
+            }
+            pb.directory(dir).redirectErrorStream(true)
 
             // Запись вывода в файл лога с ротацией при превышении 3 МБ
             val process = pb.start()
@@ -147,13 +154,15 @@ object AppManager {
             }.start()
 
             activeApps[clean] = RunningApp(clean, process, pid, cmd, System.currentTimeMillis())
-            ServerService.addLog("Приложение '$clean' успешно запущено (PID: $pid, Команда: $cmd)", "ПРИЛОЖЕНИЯ")
+            val envLabel = if (useDebian) "Debian 12 PRoot" else "Android Shell"
+            ServerService.addLog("Приложение '$clean' успешно запущено [$envLabel] (PID: $pid, Команда: $cmd)", "ПРИЛОЖЕНИЯ")
 
             JSONObject().apply {
                 put("status", "ok")
                 put("name", clean)
                 put("pid", pid)
                 put("command", cmd)
+                put("environment", envLabel)
             }
         } catch (e: Exception) {
             ServerService.addLog("Ошибка запуска '$clean': ${e.message}", "ОШИБКА")
