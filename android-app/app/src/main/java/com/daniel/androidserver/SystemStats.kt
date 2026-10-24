@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Environment
 import android.os.SystemClock
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.RandomAccessFile
@@ -40,6 +41,43 @@ object SystemStats {
         }
     }
 
+    fun getServerMemoryUsageKb(): Long {
+        var sumRssKb = 0L
+        val myUid = android.os.Process.myUid()
+        try {
+            val procDir = File("/proc")
+            val pids = procDir.listFiles()?.filter { it.name.all { ch -> ch.isDigit() } } ?: emptyList()
+            for (p in pids) {
+                val statusFile = File(p, "status")
+                if (statusFile.exists()) {
+                    var isMyUid = false
+                    var rssKb = 0L
+                    for (line in statusFile.readLines()) {
+                        if (line.startsWith("Uid:")) {
+                            val parts = line.split(Regex("\\s+"))
+                            if (parts.size >= 2 && parts[1].toIntOrNull() == myUid) {
+                                isMyUid = true
+                            }
+                        } else if (line.startsWith("VmRSS:")) {
+                            val parts = line.split(Regex("\\s+"))
+                            if (parts.size >= 2) {
+                                rssKb = parts[1].toLongOrNull() ?: 0L
+                            }
+                        }
+                    }
+                    if (isMyUid) {
+                        sumRssKb += rssKb
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        if (sumRssKb <= 0) {
+            sumRssKb = android.os.Debug.getPss()
+        }
+        return sumRssKb
+    }
+
     fun getMemoryInfo(context: Context): JSONObject {
         val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         val memInfo = ActivityManager.MemoryInfo()
@@ -50,12 +88,132 @@ object SystemStats {
         val usedMb = totalMb - availMb
         val percent = if (totalMb > 0) (usedMb * 100 / totalMb) else 0
 
+        val totalGb = String.format(java.util.Locale.US, "%.1f", totalMb / 1024.0)
+        val usedGb = String.format(java.util.Locale.US, "%.1f", usedMb / 1024.0)
+        val availGb = String.format(java.util.Locale.US, "%.1f", availMb / 1024.0)
+
+        val serverKb = getServerMemoryUsageKb()
+        val serverMb = serverKb / 1024
+        val serverGb = String.format(java.util.Locale.US, "%.2f", serverMb / 1024.0)
+        val serverPctVal = if (totalMb > 0) (serverMb * 100.0 / totalMb) else 0.0
+        val serverPercent = String.format(java.util.Locale.US, "%.1f", serverPctVal)
+        val serverFormatted = if (serverMb >= 1024) "$serverGb ГБ ($serverPercent%)" else "$serverMb МБ ($serverPercent%)"
+
         return JSONObject().apply {
             put("total_mb", totalMb)
             put("available_mb", availMb)
             put("used_mb", usedMb)
             put("used_percent", percent)
+            put("total_gb", totalGb)
+            put("used_gb", usedGb)
+            put("avail_gb", availGb)
+            put("server_used_mb", serverMb)
+            put("server_used_gb", serverGb)
+            put("server_used_percent", serverPercent)
+            put("server_formatted", serverFormatted)
             put("low_memory", memInfo.lowMemory)
+        }
+    }
+
+    fun getDetailedMemoryBreakdown(context: Context): JSONObject {
+        val memInfoObj = getMemoryInfo(context)
+        val meminfoMap = mutableMapOf<String, Long>()
+        try {
+            val f = File("/proc/meminfo")
+            if (f.exists()) {
+                for (line in f.readLines()) {
+                    val parts = line.split(":")
+                    if (parts.size >= 2) {
+                        val key = parts[0].trim()
+                        val v = parts[1].trim().split(Regex("\\s+"))[0].toLongOrNull() ?: 0L
+                        meminfoMap[key] = v
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        val totalKb = meminfoMap["MemTotal"] ?: (memInfoObj.optLong("total_mb") * 1024)
+        val freeKb = meminfoMap["MemFree"] ?: 0L
+        val availKb = meminfoMap["MemAvailable"] ?: (memInfoObj.optLong("available_mb") * 1024)
+        val cachedKb = meminfoMap["Cached"] ?: 0L
+        val buffersKb = meminfoMap["Buffers"] ?: 0L
+        val swapTotalKb = meminfoMap["SwapTotal"] ?: 0L
+        val swapFreeKb = meminfoMap["SwapFree"] ?: 0L
+        val swapUsedKb = Math.max(0L, swapTotalKb - swapFreeKb)
+
+        val myUid = android.os.Process.myUid()
+        val procList = JSONArray()
+        try {
+            val procDir = File("/proc")
+            val pids = procDir.listFiles()?.filter { it.name.all { ch -> ch.isDigit() } } ?: emptyList()
+            for (p in pids) {
+                val statusFile = File(p, "status")
+                val cmdFile = File(p, "cmdline")
+                if (statusFile.exists()) {
+                    var isMyUid = false
+                    var rssKb = 0L
+                    var pName = p.name
+                    for (line in statusFile.readLines()) {
+                        if (line.startsWith("Name:")) {
+                            pName = line.substringAfter("Name:").trim()
+                        } else if (line.startsWith("Uid:")) {
+                            val parts = line.split(Regex("\\s+"))
+                            if (parts.size >= 2 && parts[1].toIntOrNull() == myUid) {
+                                isMyUid = true
+                            }
+                        } else if (line.startsWith("VmRSS:")) {
+                            val parts = line.split(Regex("\\s+"))
+                            if (parts.size >= 2) {
+                                rssKb = parts[1].toLongOrNull() ?: 0L
+                            }
+                        }
+                    }
+                    if (isMyUid && rssKb > 0) {
+                        var cmd = ""
+                        try {
+                            if (cmdFile.exists()) {
+                                cmd = cmdFile.readText().replace('\u0000', ' ').trim()
+                            }
+                        } catch (_: Exception) {}
+
+                        val rssMb = rssKb / 1024
+                        val pct = if (totalKb > 0) String.format(java.util.Locale.US, "%.1f", rssKb * 100.0 / totalKb) else "0.0"
+
+                        val label = when {
+                            cmd.contains("com.daniel.androidserver") -> "Основное приложение-сервер (UI, HTTP, Релей)"
+                            cmd.contains("proot") || pName.contains("proot") -> "Слой виртуализации Linux (PRoot)"
+                            cmd.contains("postgres") -> "СУБД PostgreSQL 16"
+                            cmd.contains("redis") -> "Сервер Redis 7"
+                            cmd.contains("python") -> "Python приложение"
+                            cmd.contains("cloudflared") -> "Cloudflare Tunnel агент"
+                            else -> if (cmd.isNotEmpty()) cmd else pName
+                        }
+
+                        procList.put(JSONObject().apply {
+                            put("pid", p.name.toIntOrNull() ?: 0)
+                            put("name", pName)
+                            put("cmd", if (cmd.length > 50) cmd.substring(0, 47) + "..." else cmd)
+                            put("label", label)
+                            put("rss_mb", rssMb)
+                            put("rss_kb", rssKb)
+                            put("percent", pct)
+                        })
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        return JSONObject().apply {
+            put("memory", memInfoObj)
+            put("categories", JSONObject().apply {
+                put("cached_mb", cachedKb / 1024)
+                put("buffers_mb", buffersKb / 1024)
+                put("free_mb", freeKb / 1024)
+                put("available_mb", availKb / 1024)
+                put("swap_total_mb", swapTotalKb / 1024)
+                put("swap_used_mb", swapUsedKb / 1024)
+            })
+            put("server_processes", procList)
         }
     }
 

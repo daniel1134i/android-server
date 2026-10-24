@@ -347,6 +347,8 @@ class CloudRelayClient(
 
                 path == "/api/debian/status" -> DebianManager.getInstallationStatus()
 
+                path == "/api/memory/details" -> SystemStats.getDetailedMemoryBreakdown(context)
+
                 path == "/api/debian/install" && method == "POST" -> {
                     val customUrl = bodyJson.optString("url", "").ifEmpty { null }
                     val force = bodyJson.optBoolean("force", false)

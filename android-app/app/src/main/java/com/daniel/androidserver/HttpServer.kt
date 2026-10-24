@@ -230,6 +230,11 @@ class HttpServer(
                     sendJsonResponse(output, 200, JSONObject().put("status", "ok"))
                 }
 
+                uriPath == "/api/memory/details" -> {
+                    val details = SystemStats.getDetailedMemoryBreakdown(context)
+                    sendJsonResponse(output, 200, details)
+                }
+
                 uriPath == "/api/apps" -> {
                     val resp = JSONObject().apply {
                         put("status", "ok")

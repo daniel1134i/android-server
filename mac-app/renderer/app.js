@@ -427,7 +427,12 @@ function renderTelemetry(data) {
   valBatteryPercent.textContent = `${bat.percent || 0}%`;
   barBatteryFill.style.width = `${bat.percent || 0}%`;
   batteryBadge.textContent = `🔋 ${bat.percent || 0}%`;
-  valBatteryTemp.textContent = `${bat.temp_c || 0}°C`;
+  valBatteryTemp.textContent = bat.temp_formatted || `${bat.temp_c || 0}°C`;
+
+  const elBatRemaining = document.getElementById('valBatteryRemaining');
+  if (elBatRemaining) {
+    elBatRemaining.textContent = bat.remaining_formatted || (bat.is_charging ? 'Заряжается' : 'Разряжается');
+  }
 
   let statusRu = 'Зарядка';
   if (bat.status === 'Discharging') statusRu = 'Разрядка';
@@ -450,11 +455,22 @@ function renderTelemetry(data) {
 
   // ОЗУ
   const mem = data.memory || {};
-  const totalMemGb = ((mem.total_mb || 0) / 1024).toFixed(1);
-  const usedMemGb = ((mem.used_mb || 0) / 1024).toFixed(1);
+  const totalMemGb = mem.total_gb || ((mem.total_mb || 0) / 1024).toFixed(1);
+  const usedMemGb = mem.used_gb || ((mem.used_mb || 0) / 1024).toFixed(1);
   const memPct = mem.used_percent || 0;
   valRamText.textContent = `${usedMemGb} / ${totalMemGb} ГБ (${memPct}%)`;
   barRamFill.style.width = `${memPct}%`;
+
+  const elServerRam = document.getElementById('valMacServerRam');
+  if (elServerRam) {
+    if (mem.server_formatted) {
+      elServerRam.textContent = mem.server_formatted;
+    } else if (mem.server_used_mb) {
+      elServerRam.textContent = `${mem.server_used_mb} МБ (${mem.server_used_percent || '0'}%)`;
+    } else {
+      elServerRam.textContent = '-- МБ (--%)';
+    }
+  }
 
   // Накопитель
   const stor = data.storage || {};
@@ -1656,3 +1672,105 @@ async function checkUsbReconnection() {
   } catch (_) {}
 }
 setInterval(checkUsbReconnection, 3500);
+
+// ========================================================
+// 📊 МОДАЛЬНОЕ ОКНО: АНАЛИЗ ОПЕРАТИВНОЙ ПАМЯТИ (ОЗУ)
+// ========================================================
+const macCardRam = document.getElementById('macCardRam');
+const macModalRamAnalysis = document.getElementById('macModalRamAnalysis');
+const btnMacCloseRamModal = document.getElementById('btnMacCloseRamModal');
+const btnMacRefreshRamModal = document.getElementById('btnMacRefreshRamModal');
+
+async function loadMacRamAnalysis() {
+  const tbody = document.getElementById('macRamProcessTableBody');
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 14px; color: var(--text-dim);">Получение данных о памяти...</td></tr>';
+  }
+  try {
+    const data = await apiCall('/api/memory/details');
+    if (!data) return;
+
+    const mem = data.memory || {};
+    const cats = data.categories || {};
+    const procs = data.server_processes || [];
+
+    const elTotal = document.getElementById('macRamModalTotal');
+    const elUsed = document.getElementById('macRamModalUsed');
+    const elAvail = document.getElementById('macRamModalAvail');
+    const elServer = document.getElementById('macRamModalServer');
+
+    if (elTotal) elTotal.textContent = `${mem.total_gb || ((mem.total_mb || 0)/1024).toFixed(1)} ГБ`;
+    if (elUsed) elUsed.textContent = `${mem.used_gb || ((mem.used_mb || 0)/1024).toFixed(1)} ГБ (${mem.used_percent || 0}%)`;
+    if (elAvail) elAvail.textContent = `${mem.avail_gb || ((mem.available_mb || 0)/1024).toFixed(1)} ГБ`;
+    if (elServer) {
+      if (mem.server_formatted) {
+        elServer.textContent = mem.server_formatted;
+      } else if (mem.server_used_mb) {
+        elServer.textContent = `${mem.server_used_mb} МБ (${mem.server_used_percent || '0'}%)`;
+      }
+    }
+
+    const elCached = document.getElementById('macRamCatCached');
+    const elBuffers = document.getElementById('macRamCatBuffers');
+    const elSwap = document.getElementById('macRamCatSwap');
+    const elFree = document.getElementById('macRamCatFree');
+
+    if (elCached) elCached.textContent = `${cats.cached_mb || 0} МБ`;
+    if (elBuffers) elBuffers.textContent = `${cats.buffers_mb || 0} МБ`;
+    if (elSwap) elSwap.textContent = `${cats.swap_used_mb || 0} МБ (из ${cats.swap_total_mb || 0} МБ ZRAM)`;
+    if (elFree) elFree.textContent = `${cats.free_mb || 0} МБ`;
+
+    if (tbody) {
+      if (procs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 14px; color: var(--text-dim);">Процессы сервера не обнаружены</td></tr>';
+      } else {
+        tbody.innerHTML = procs.map(p => `
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding: 6px 8px; color: var(--text-dim);">${p.pid}</td>
+            <td style="padding: 6px 8px;">
+              <div style="font-weight: bold; color: var(--text-main);">${escapeHtml(p.name || p.cmd || 'Процесс')}</div>
+              <div style="font-size: 10px; color: var(--text-dim);">${escapeHtml(p.label || p.cmd || '')}</div>
+            </td>
+            <td style="padding: 6px 8px; text-align: right; color: #6ee7b7; font-weight: bold;">${p.rss_mb} МБ</td>
+            <td style="padding: 6px 8px; text-align: right; color: var(--text-dim);">${p.percent || '0'}%</td>
+          </tr>
+        `).join('');
+      }
+    }
+  } catch (err) {
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 14px; color: var(--agy-coral);">Ошибка загрузки: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+}
+
+if (macCardRam) {
+  macCardRam.addEventListener('click', () => {
+    if (macModalRamAnalysis) {
+      macModalRamAnalysis.classList.remove('hidden');
+      loadMacRamAnalysis();
+    }
+  });
+}
+
+if (btnMacCloseRamModal) {
+  btnMacCloseRamModal.addEventListener('click', () => {
+    if (macModalRamAnalysis) {
+      macModalRamAnalysis.classList.add('hidden');
+    }
+  });
+}
+
+if (btnMacRefreshRamModal) {
+  btnMacRefreshRamModal.addEventListener('click', () => {
+    loadMacRamAnalysis();
+  });
+}
+
+if (macModalRamAnalysis) {
+  macModalRamAnalysis.addEventListener('click', (e) => {
+    if (e.target === macModalRamAnalysis) {
+      macModalRamAnalysis.classList.add('hidden');
+    }
+  });
+}

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.Build
 import org.json.JSONObject
 
 class BatteryMonitor(private val context: Context) {
@@ -18,19 +19,24 @@ class BatteryMonitor(private val context: Context) {
         val isCharging: Boolean = false,
         val status: String = "Unknown",
         val health: String = "Unknown",
-        val pluggedType: String = "Unplugged"
+        val pluggedType: String = "Unplugged",
+        val remainingFormatted: String = "--",
+        val remainingSeconds: Long = -1L
     ) {
         fun toJson(): JSONObject = JSONObject().apply {
             put("level", level)
             put("percent", percent)
             put("temp_c", tempCelsius)
+            put("temp_formatted", "${String.format(java.util.Locale.US, "%.1f", tempCelsius)}°C")
             put("voltage_mv", voltageMv)
             put("is_charging", isCharging)
             put("status", status)
             put("health", health)
             put("plugged", pluggedType)
+            put("remaining_formatted", remainingFormatted)
+            put("remaining_seconds", remainingSeconds)
             put("overheating", tempCelsius >= 42.0)
-            put("advice", if (percent > 85 && isCharging) "Recommend unplugging to extend lifespan" else "Battery state optimal")
+            put("advice", if (percent > 85 && isCharging) "Рекомендуется отключить зарядку для продления срока службы" else "Состояние аккумулятора в норме")
         }
     }
 
@@ -89,10 +95,60 @@ class BatteryMonitor(private val context: Context) {
 
         val pluggedInt = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
         val plugged = when (pluggedInt) {
-            BatteryManager.BATTERY_PLUGGED_AC -> "AC Wall Charger"
-            BatteryManager.BATTERY_PLUGGED_USB -> "USB Cable"
-            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
-            else -> "Battery Only"
+            BatteryManager.BATTERY_PLUGGED_AC -> "Сеть (220V адаптер)"
+            BatteryManager.BATTERY_PLUGGED_USB -> "USB провод"
+            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Беспроводная зарядка"
+            else -> "Работа от аккумулятора"
+        }
+
+        // Расчет оставшегося времени работы или времени до полной зарядки
+        val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        var remainingSec = -1L
+        var remainingStr = "--"
+
+        if (isCharging) {
+            if (percent >= 100) {
+                remainingStr = "Полный заряд (100%)"
+                remainingSec = 0L
+            } else {
+                val chargeTimeMs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    try { bm?.computeChargeTimeRemaining() ?: -1L } catch (_: Exception) { -1L }
+                } else -1L
+
+                if (chargeTimeMs > 0) {
+                    remainingSec = chargeTimeMs / 1000
+                    val hours = remainingSec / 3600
+                    val mins = (remainingSec % 3600) / 60
+                    remainingStr = if (hours > 0) "До 100%: ~${hours} ч ${mins} мин" else "До 100%: ~${mins} мин"
+                } else {
+                    val neededPct = 100 - percent
+                    val mins = Math.max(5, (neededPct * 1.3).toLong())
+                    val hours = mins / 60
+                    val remMins = mins % 60
+                    remainingStr = if (hours > 0) "До 100%: ~${hours} ч ${remMins} мин" else "До 100%: ~${mins} мин"
+                    remainingSec = mins * 60
+                }
+            }
+        } else {
+            val currentNowUa = try { bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: 0 } catch (_: Exception) { 0 }
+            val chargeCounterUah = try { bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER) ?: 0 } catch (_: Exception) { 0 }
+
+            if (currentNowUa < -10000 && chargeCounterUah > 0) {
+                val currentMa = Math.abs(currentNowUa) / 1000.0
+                val chargeMah = chargeCounterUah / 1000.0
+                val hours = chargeMah / currentMa
+                remainingSec = (hours * 3600).toLong()
+                val h = remainingSec / 3600
+                val m = (remainingSec % 3600) / 60
+                remainingStr = "~${h} ч ${m} мин"
+            } else {
+                // Сервер в фоне с экраном потребляет в среднем 4-6% в час
+                val estHours = percent / 4.5
+                val h = estHours.toInt()
+                val m = ((estHours - h) * 60).toInt()
+                remainingSec = (estHours * 3600).toLong()
+                remainingStr = if (h > 0) "~${h} ч ${m} мин" else "~${m} мин"
+            }
         }
 
         currentInfo = BatteryInfo(
@@ -104,7 +160,9 @@ class BatteryMonitor(private val context: Context) {
             isCharging = isCharging,
             status = status,
             health = health,
-            pluggedType = plugged
+            pluggedType = plugged,
+            remainingFormatted = remainingStr,
+            remainingSeconds = remainingSec
         )
     }
 }

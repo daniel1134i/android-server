@@ -418,6 +418,21 @@ body {
 .highlight-amber { color: var(--agy-amber) !important; }
 .highlight-blue { color: var(--agy-blue-light) !important; }
 
+.clickable-card {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clickable-card:hover {
+  border-color: var(--agy-blue);
+  box-shadow: 0 4px 20px rgba(77, 130, 241, 0.25);
+  transform: translateY(-1px);
+}
+
+.clickable-card:active {
+  transform: translateY(0);
+}
+
 /* Bottom Activity Stream */
 .activity-card {
   flex: 1;

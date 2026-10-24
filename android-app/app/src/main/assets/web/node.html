@@ -132,7 +132,7 @@
         <!-- Батарея -->
         <div class="node-card">
           <div class="card-head">
-            <span class="card-title">БАТАРЕЯ И ТЕМПЕРАТУРА</span>
+            <span class="card-title">АККУМУЛЯТОР И ПИТАНИЕ</span>
             <span class="badge-mini" id="valBatStatus">ЗАРЯДКА</span>
           </div>
           <div class="metric-hero">
@@ -144,45 +144,45 @@
           </div>
           <div class="card-kv-grid">
             <div class="kv-item">
+              <span class="k">Осталось времени</span>
+              <span class="v highlight-green" id="valBatRemaining">--</span>
+            </div>
+            <div class="kv-item">
+              <span class="k">Температура</span>
+              <span class="v highlight-blue" id="valBatTempDetail">--°C</span>
+            </div>
+            <div class="kv-item">
               <span class="k">Источник питания</span>
               <span class="v" id="valBatSource">--</span>
-            </div>
-            <div class="kv-item">
-              <span class="k">Здоровье батареи</span>
-              <span class="v highlight-green" id="valBatHealth">Отличное</span>
-            </div>
-            <div class="kv-item">
-              <span class="k">Сохранение ресурса</span>
-              <span class="v highlight-amber">Эко-диапазон 20% - 80%</span>
             </div>
           </div>
         </div>
 
         <!-- Оперативная память и процессор -->
-        <div class="node-card">
+        <div class="node-card clickable-card" id="cardRam" style="cursor: pointer; position: relative;" title="Нажмите для подробного анализа распределения памяти">
           <div class="card-head">
-            <span class="card-title">ОЗУ И ПРОИЗВОДИТЕЛЬНОСТЬ</span>
+            <span class="card-title">ОПЕРАТИВНАЯ ПАМЯТЬ</span>
             <span class="badge-mini" id="valRamPct">--%</span>
           </div>
           <div class="metric-hero">
             <span class="hero-num" id="valRamUsed">--</span>
-            <span class="hero-unit">/ <span id="valRamTotal">--</span> ГБ ОЗУ</span>
+            <span class="hero-unit">/ <span id="valRamTotal">--</span> ГБ</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill fill-amber" id="barRam"></div>
           </div>
           <div class="card-kv-grid">
             <div class="kv-item">
-              <span class="k">Процессор</span>
-              <span class="v" id="valCpuCores">8 ядер</span>
+              <span class="k">Использует сервер</span>
+              <span class="v highlight-blue" id="valServerRam">-- МБ (--%)</span>
             </div>
             <div class="kv-item">
-              <span class="k">Архитектура</span>
-              <span class="v" id="valCpuArch">arm64-v8a</span>
+              <span class="k">Свободно в системе</span>
+              <span class="v" id="valRamAvail">-- ГБ</span>
             </div>
-            <div class="kv-item">
-              <span class="k">Белый список Doze</span>
-              <span class="v highlight-green">Без ограничений (Активен)</span>
+            <div class="kv-item" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.07);">
+              <span class="k" style="color: var(--agy-blue-light); font-size: 10px;">🔍 Нажмите для анализа процессов</span>
+              <span style="font-size: 10px; color: var(--agy-blue); font-weight: bold;">ПОДРОБНЕЕ ➔</span>
             </div>
           </div>
         </div>
@@ -354,6 +354,83 @@
         </div>
       </div>
       <div id="modalAppLogBody" class="modal-body">Загрузка логов...</div>
+    </div>
+  </div>
+
+  <!-- Модальное окно анализа ОЗУ (Memory Analysis Modal) -->
+  <div id="modalRamAnalysis" class="app-modal hidden">
+    <div class="modal-content" style="width: 780px; max-width: 95vw; height: 560px; max-height: 90vh;">
+      <div class="modal-header">
+        <h3 class="modal-title">[ 📊 АНАЛИЗ РАСПРЕДЕЛЕНИЯ ОПЕРАТИВНОЙ ПАМЯТИ (RAM) ]</h3>
+        <div class="modal-actions">
+          <button id="btnRefreshRamModal" class="btn-chip">↻ ОБНОВИТЬ</button>
+          <button id="btnCloseRamModal" class="btn-chip btn-close-modal">✕ ЗАКРЫТЬ</button>
+        </div>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+        <!-- Сводка памяти -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;">
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-color); padding: 10px; border-radius: 4px;">
+            <div style="font-size: 10px; color: var(--text-dim);">ОБЩАЯ ПАМЯТЬ СИСТЕМЫ</div>
+            <div id="ramModalTotal" style="font-size: 16px; font-weight: bold; color: var(--text-main); margin-top: 4px;">-- ГБ</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-color); padding: 10px; border-radius: 4px;">
+            <div style="font-size: 10px; color: var(--text-dim);">ЗАНЯТО ВСЕМИ ПРОЦЕССАМИ</div>
+            <div id="ramModalUsed" style="font-size: 16px; font-weight: bold; color: var(--agy-coral); margin-top: 4px;">-- ГБ (--%)</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-color); padding: 10px; border-radius: 4px;">
+            <div style="font-size: 10px; color: var(--text-dim);">СВОБОДНО / ДОСТУПНО</div>
+            <div id="ramModalAvail" style="font-size: 16px; font-weight: bold; color: var(--agy-green); margin-top: 4px;">-- ГБ</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-color); padding: 10px; border-radius: 4px; border-left: 3px solid var(--agy-blue);">
+            <div style="font-size: 10px; color: var(--agy-blue-light);">ИСПОЛЬЗУЕТ СЕРВЕР</div>
+            <div id="ramModalServer" style="font-size: 16px; font-weight: bold; color: var(--agy-blue-light); margin-top: 4px;">-- МБ (--%)</div>
+          </div>
+        </div>
+
+        <!-- Системные категории памяти -->
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-color); padding: 12px; border-radius: 4px;">
+          <div style="font-size: 11px; font-family: var(--font-pixel); color: var(--text-main); margin-bottom: 8px;">КУДА УХОДИТ ПАМЯТЬ:</div>
+          <div id="ramCategoriesGrid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-dim);">Файловый кэш ОС (Cached):</span>
+              <span id="ramCatCached" style="font-weight: bold; color: var(--text-main);">-- МБ</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-dim);">Буферы ядра (Buffers):</span>
+              <span id="ramCatBuffers" style="font-weight: bold; color: var(--text-main);">-- МБ</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-dim);">ZRAM Сжатие (Swap):</span>
+              <span id="ramCatSwap" style="font-weight: bold; color: var(--text-main);">-- МБ</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-dim);">Свободная память (Free):</span>
+              <span id="ramCatFree" style="font-weight: bold; color: var(--text-main);">-- МБ</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Таблица процессов сервера -->
+        <div style="flex: 1; display: flex; flex-direction: column; min-height: 180px;">
+          <div style="font-size: 11px; font-family: var(--font-pixel); color: var(--text-main); margin-bottom: 6px;">ПРОЦЕССЫ СЕРВЕРА И ПОДСИСТЕМЫ:</div>
+          <div style="flex: 1; overflow-y: auto; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--font-mono);">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-dim); text-align: left;">
+                  <th style="padding: 6px 8px;">PID</th>
+                  <th style="padding: 6px 8px;">КОМПОНЕНТ / ПРОЦЕСС</th>
+                  <th style="padding: 6px 8px; text-align: right;">ПАМЯТЬ (RSS)</th>
+                  <th style="padding: 6px 8px; text-align: right;">% ОЗУ</th>
+                </tr>
+              </thead>
+              <tbody id="ramProcessTableBody">
+                <tr><td colspan="4" style="text-align: center; padding: 14px; color: var(--text-dim);">Загрузка процессов...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

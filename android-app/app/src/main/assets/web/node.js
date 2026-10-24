@@ -211,33 +211,43 @@ async function pollStatus() {
     const bat = data.battery || {};
     const batPct = bat.percent || 0;
     if (valBatPct) valBatPct.textContent = `${batPct}%`;
-    if (valBatTemp) valBatTemp.textContent = `${bat.temp_c || 0}°C`;
+    const tempStr = bat.temp_formatted || `${(bat.temp_c || 0).toFixed(1)}°C`;
+    if (valBatTemp) valBatTemp.textContent = tempStr;
+    const valBatTempDetail = document.getElementById('valBatTempDetail');
+    if (valBatTempDetail) valBatTempDetail.textContent = tempStr;
     if (barBat) barBat.style.width = `${batPct}%`;
-    
+
     let statusRu = 'ЗАРЯДКА';
     if (bat.status === 'Discharging') statusRu = 'РАЗРЯДКА';
     else if (bat.status === 'Full') statusRu = 'ЗАРЯЖЕНО';
     else if (bat.status === 'Not charging') statusRu = 'НЕ ЗАРЯЖАЕТСЯ';
     if (valBatStatus) valBatStatus.textContent = statusRu;
 
-    let sourceRu = 'Сетевой адаптер (AC)';
-    if (bat.plugged === 'USB') sourceRu = 'Порт USB';
-    else if (bat.plugged === 'Wireless') sourceRu = 'Беспроводная';
-    else if (bat.plugged === 'Battery') sourceRu = 'От аккумулятора';
-    if (valBatSource) valBatSource.textContent = sourceRu;
+    const valBatRemaining = document.getElementById('valBatRemaining');
+    if (valBatRemaining) {
+      valBatRemaining.textContent = bat.remaining_formatted || (bat.is_charging ? 'Зарядка...' : 'Оценка...');
+    }
 
-    if (valBatHealth) valBatHealth.textContent = bat.health === 'Good' ? 'Отличное' : (bat.health || 'В норме');
-    if (badgeBattery) badgeBattery.textContent = `🔋 ${batPct}%`;
+    if (valBatSource) valBatSource.textContent = bat.plugged || 'Работа от аккумулятора';
+    if (badgeBattery) badgeBattery.textContent = `🔋 ${batPct}% (${tempStr})`;
 
     // ОЗУ
     const mem = data.memory || {};
-    const memUsedGb = ((mem.used_mb || 0) / 1024).toFixed(1);
-    const memTotalGb = ((mem.total_mb || 0) / 1024).toFixed(1);
+    const memUsedGb = mem.used_gb || ((mem.used_mb || 0) / 1024).toFixed(1);
+    const memTotalGb = mem.total_gb || ((mem.total_mb || 0) / 1024).toFixed(1);
+    const memAvailGb = mem.avail_gb || ((mem.available_mb || 0) / 1024).toFixed(1);
     const memPct = mem.used_percent || 0;
     if (valRamPct) valRamPct.textContent = `${memPct}%`;
     if (valRamUsed) valRamUsed.textContent = memUsedGb;
     if (valRamTotal) valRamTotal.textContent = memTotalGb;
+    const valRamAvail = document.getElementById('valRamAvail');
+    if (valRamAvail) valRamAvail.textContent = `${memAvailGb} ГБ`;
     if (barRam) barRam.style.width = `${memPct}%`;
+
+    const valServerRam = document.getElementById('valServerRam');
+    if (valServerRam) {
+      valServerRam.textContent = mem.server_formatted || `${mem.server_used_mb || 0} МБ (${mem.server_used_percent || 0}%)`;
+    }
 
     // Диск
     const st = data.storage || {};
@@ -756,6 +766,92 @@ if (btnModalRefreshLogs) {
   btnModalRefreshLogs.addEventListener('click', () => {
     if (currentViewingApp) fetchAppLogs(currentViewingApp);
   });
+}
+
+// Модальное окно анализа ОЗУ (Memory Analysis)
+const cardRam = document.getElementById('cardRam');
+const modalRamAnalysis = document.getElementById('modalRamAnalysis');
+const btnCloseRamModal = document.getElementById('btnCloseRamModal');
+const btnRefreshRamModal = document.getElementById('btnRefreshRamModal');
+
+async function loadRamAnalysis() {
+  try {
+    const res = await fetch('/api/memory/details');
+    if (!res.ok) throw new Error('Ошибка HTTP ' + res.status);
+    const data = await res.json();
+    const mem = data.memory || {};
+    const cats = data.categories || {};
+    const procs = data.server_processes || [];
+
+    const ramModalTotal = document.getElementById('ramModalTotal');
+    if (ramModalTotal) ramModalTotal.textContent = `${mem.total_gb || ((mem.total_mb || 0) / 1024).toFixed(1)} ГБ`;
+
+    const ramModalUsed = document.getElementById('ramModalUsed');
+    if (ramModalUsed) ramModalUsed.textContent = `${mem.used_gb || ((mem.used_mb || 0) / 1024).toFixed(1)} ГБ (${mem.used_percent || 0}%)`;
+
+    const ramModalAvail = document.getElementById('ramModalAvail');
+    if (ramModalAvail) ramModalAvail.textContent = `${mem.avail_gb || ((mem.available_mb || 0) / 1024).toFixed(1)} ГБ`;
+
+    const ramModalServer = document.getElementById('ramModalServer');
+    if (ramModalServer) ramModalServer.textContent = mem.server_formatted || `${mem.server_used_mb || 0} МБ`;
+
+    const ramCatCached = document.getElementById('ramCatCached');
+    if (ramCatCached) ramCatCached.textContent = `${cats.cached_mb || 0} МБ`;
+
+    const ramCatBuffers = document.getElementById('ramCatBuffers');
+    if (ramCatBuffers) ramCatBuffers.textContent = `${cats.buffers_mb || 0} МБ`;
+
+    const ramCatSwap = document.getElementById('ramCatSwap');
+    if (ramCatSwap) ramCatSwap.textContent = `${cats.swap_used_mb || 0} / ${cats.swap_total_mb || 0} МБ`;
+
+    const ramCatFree = document.getElementById('ramCatFree');
+    if (ramCatFree) ramCatFree.textContent = `${cats.free_mb || 0} МБ`;
+
+    const tbody = document.getElementById('ramProcessTableBody');
+    if (tbody) {
+      if (procs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 14px; color: var(--text-dim);">Серверные процессы не найдены</td></tr>';
+      } else {
+        tbody.innerHTML = procs.map(p => `
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding: 7px 8px; color: var(--text-dim); font-size: 10px;">${p.pid}</td>
+            <td style="padding: 7px 8px;">
+              <div style="font-weight: 600; color: var(--text-main);">${escapeHtml(p.name)}</div>
+              <div style="font-size: 10px; color: var(--text-dim);">${escapeHtml(p.label || p.cmd || '')}</div>
+            </td>
+            <td style="padding: 7px 8px; text-align: right; color: var(--agy-blue-light); font-weight: bold;">${p.rss_mb} МБ</td>
+            <td style="padding: 7px 8px; text-align: right; color: var(--text-main);">${p.percent}%</td>
+          </tr>
+        `).join('');
+      }
+    }
+  } catch (err) {
+    const tbody = document.getElementById('ramProcessTableBody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="color: var(--agy-coral); padding: 14px; text-align: center;">Ошибка загрузки: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+if (cardRam && modalRamAnalysis) {
+  cardRam.addEventListener('click', () => {
+    modalRamAnalysis.classList.remove('hidden');
+    loadRamAnalysis();
+  });
+}
+
+if (btnCloseRamModal && modalRamAnalysis) {
+  btnCloseRamModal.addEventListener('click', () => {
+    modalRamAnalysis.classList.add('hidden');
+  });
+
+  modalRamAnalysis.addEventListener('click', (e) => {
+    if (e.target === modalRamAnalysis) {
+      modalRamAnalysis.classList.add('hidden');
+    }
+  });
+}
+
+if (btnRefreshRamModal) {
+  btnRefreshRamModal.addEventListener('click', loadRamAnalysis);
 }
 
 // Кнопки управления хост-нодой
