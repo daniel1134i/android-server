@@ -27,20 +27,35 @@ object AppManager {
 
     fun init(context: Context? = null) {
         try {
-            // Предпочитаем внешний каталог приложения (всегда доступен на запись в Android 11-15)
-            val base = if (context != null) {
-                context.getExternalFilesDir(null) ?: context.filesDir
-            } else {
-                File(Environment.getExternalStorageDirectory(), "ServerApps")
-            }
+            // Внутренний каталог приложения (гарантированно доступен для чтения/записи и PRoot на Android 11-15)
+            val base = context?.filesDir ?: File(Environment.getExternalStorageDirectory(), "ServerApps")
             appsDir = File(base, "ServerApps")
             if (!appsDir.exists()) appsDir.mkdirs()
-            createSampleAppIfEmpty()
+            createSampleAppIfEmpty(context)
         } catch (_: Exception) {}
     }
 
-    private fun createSampleAppIfEmpty() {
+    private fun createSampleAppIfEmpty(context: Context? = null) {
         try {
+            // Распаковываем предустановленные проекты из assets/apps если их еще нет
+            if (context != null) {
+                try {
+                    val assetApps = context.assets.list("apps") ?: emptyArray()
+                    for (appZip in assetApps) {
+                        if (appZip.endsWith(".zip")) {
+                            val appName = appZip.removeSuffix(".zip")
+                            val target = File(appsDir, appName)
+                            if (!target.exists()) {
+                                context.assets.open("apps/$appZip").use { stream ->
+                                    val bytes = stream.readBytes()
+                                    deployZip(appName, bytes)
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
             val existing = appsDir.listFiles()?.filter { it.isDirectory }
             if (existing.isNullOrEmpty()) {
                 val sampleDir = File(appsDir, "demo-service")
@@ -129,7 +144,7 @@ object AppManager {
                     env["PATH"] = "${dir.absolutePath}:/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin:" + (env["PATH"] ?: "")
                 }
             }
-            pb.directory(dir).redirectErrorStream(true)
+            pb.directory(dir.apply { if (!exists()) mkdirs() }).redirectErrorStream(true)
 
             // Запись вывода в файл лога с ротацией при превышении 3 МБ
             val process = pb.start()
@@ -175,6 +190,11 @@ object AppManager {
         val running = activeApps.remove(clean) ?: return false
         return try {
             running.process.destroyForcibly()
+            if (running.pid > 0) {
+                try {
+                    Runtime.getRuntime().exec("kill -9 ${running.pid}")
+                } catch (_: Exception) {}
+            }
             ServerService.addLog("Приложение '$clean' остановлено", "ПРИЛОЖЕНИЯ")
             true
         } catch (_: Exception) {

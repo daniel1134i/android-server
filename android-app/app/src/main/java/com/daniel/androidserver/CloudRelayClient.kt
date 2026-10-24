@@ -387,6 +387,7 @@ class CloudRelayClient(
         val pb = if (actualUseProot) {
             val prootCmd = DebianManager.buildProotCommand(cmd, workDir = "/apps")
             ProcessBuilder(prootCmd).apply {
+                directory(context.filesDir)
                 DebianManager.applyEnvironment(environment())
             }
         } else {

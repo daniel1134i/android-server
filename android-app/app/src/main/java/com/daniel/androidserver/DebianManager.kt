@@ -37,7 +37,9 @@ object DebianManager {
         if (isInstalled()) {
             configureRootfs()
             currentStage = "ready"
-            statusMessage = "Debian 12 (Bookworm) готов к работе"
+            statusMessage = "Linux Server (PRoot) готов к работе"
+        } else if (hasEmbeddedRootfs()) {
+            installDebianAsync()
         }
     }
 
@@ -49,7 +51,7 @@ object DebianManager {
     fun isInstalled(): Boolean {
         return try {
             val d = getDebianDir()
-            File(d, "bin/bash").exists() || File(d, "usr/bin/bash").exists() || File(d, "bin/sh").exists()
+            File(d, "bin/sh").exists() || File(d, "bin/busybox").exists() || File(d, "usr/bin/python3").exists()
         } catch (_: Exception) {
             false
         }
@@ -59,7 +61,6 @@ object DebianManager {
         val ctx = appContext ?: return null
         val nativeLib = File(ctx.applicationInfo.nativeLibraryDir, "libproot.so")
         if (nativeLib.exists()) {
-            try { nativeLib.setExecutable(true, false) } catch (_: Exception) {}
             return nativeLib
         }
         val fallback = File(ctx.filesDir, "libproot.so")
@@ -72,9 +73,9 @@ object DebianManager {
 
     private fun ensureProotExecutable() {
         try {
-            val proot = getProotBinary()
-            if (proot != null && proot.exists()) {
-                proot.setExecutable(true, false)
+            val fallback = File(appContext?.filesDir, "libproot.so")
+            if (fallback.exists()) {
+                fallback.setExecutable(true, false)
             }
         } catch (_: Exception) {}
     }
@@ -357,6 +358,7 @@ object DebianManager {
 
                             if (entry.isDirectory) {
                                 dest.mkdirs()
+                                try { Os.chmod(dest.absolutePath, 493) } catch (_: Exception) {} // 0755
                             } else if (entry.isSymbolicLink) {
                                 parentFile.mkdirs()
                                 try {
@@ -393,17 +395,17 @@ object DebianManager {
                                     tarIn.copyTo(fos)
                                 }
                                 val mode = entry.mode
-                                if ((mode and 73) != 0 || // 0111 octal (executable)
+                                val isExec = (mode and 73) != 0 || // 0111 octal (executable)
                                     cleanName.startsWith("bin/") ||
                                     cleanName.startsWith("usr/bin/") ||
                                     cleanName.startsWith("sbin/") ||
-                                    cleanName.startsWith("usr/sbin/")
-                                ) {
-                                    try {
-                                        Os.chmod(dest.absolutePath, if (mode != 0) mode else 493) // 0755
-                                    } catch (_: Exception) {
-                                        dest.setExecutable(true, false)
-                                    }
+                                    cleanName.startsWith("usr/sbin/") ||
+                                    cleanName.endsWith(".sh")
+                                val finalMode = if (isExec) 493 else 420 // 0755 or 0644
+                                try {
+                                    Os.chmod(dest.absolutePath, finalMode)
+                                } catch (_: Exception) {
+                                    if (isExec) dest.setExecutable(true, false)
                                 }
                             }
                             entry = tarIn.nextTarEntry
@@ -418,10 +420,23 @@ object DebianManager {
             val d = getDebianDir()
             if (!d.exists()) return
 
-            // 1. Создание каталогов для монтирования
-            listOf("dev", "proc", "sys", "sdcard", "apps", "tmp", "root").forEach { dirName ->
+            // 1. Создание каталогов для монтирования и установка 0755
+            listOf("dev", "proc", "sys", "sdcard", "apps", "root").forEach { dirName ->
                 val f = File(d, dirName)
                 if (!f.exists()) f.mkdirs()
+                try { Os.chmod(f.absolutePath, 493) } catch (_: Exception) {} // 0755
+            }
+
+            // Настройка /tmp, /run/postgresql, /run/redis с правами 0777
+            listOf("tmp", "run/postgresql", "run/redis").forEach { rel ->
+                val dir = File(d, rel).apply { if (!exists()) mkdirs() }
+                try { Os.chmod(dir.absolutePath, 511) } catch (_: Exception) {} // 0777
+            }
+
+            // Обеспечить права на libshmem.so
+            val shmemLib = File(d, "usr/lib/libshmem.so")
+            if (shmemLib.exists()) {
+                try { Os.chmod(shmemLib.absolutePath, 493) } catch (_: Exception) {}
             }
 
             // 2. Настройка DNS в resolv.conf
@@ -451,11 +466,35 @@ object DebianManager {
                 )
             }
 
-            // 4. Настройка /tmp прав
-            val tmpDir = File(d, "tmp")
-            try { Os.chmod(tmpDir.absolutePath, 511) } catch (_: Exception) {} // 0777
+            // 4. Права 0644 на файлы GPG-ключей (trusted.gpg.d и keyrings)
+            listOf("etc/apt/trusted.gpg.d", "usr/share/keyrings").forEach { rel ->
+                val kDir = File(d, rel)
+                if (kDir.exists()) {
+                    try { Os.chmod(kDir.absolutePath, 493) } catch (_: Exception) {} // 0755
+                    kDir.walkTopDown().forEach { f ->
+                        try {
+                            if (f.isDirectory) {
+                                Os.chmod(f.absolutePath, 493) // 0755
+                            } else {
+                                Os.chmod(f.absolutePath, 420) // 0644
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
 
-            // 5. Обеспечить исполняемость sh/bash
+            // 5. Конфиг apt: 99security
+            val aptConfDir = File(d, "etc/apt/apt.conf.d").apply { if (!exists()) mkdirs() }
+            File(aptConfDir, "99security").writeText(
+                """
+                Acquire::AllowInsecureRepositories "true";
+                Acquire::AllowDowngradeToInsecureRepositories "true";
+                APT::Install-Recommends "0";
+                APT::Install-Suggests "0";
+                """.trimIndent() + "\n"
+            )
+
+            // 6. Обеспечить исполняемость sh/bash (0755)
             listOf("bin/bash", "bin/sh", "usr/bin/bash", "usr/bin/sh").forEach { binRel ->
                 val bf = File(d, binRel)
                 if (bf.exists()) {
@@ -474,38 +513,54 @@ object DebianManager {
     ): List<String> {
         val proot = getProotBinary()?.absolutePath ?: throw IllegalStateException("libproot.so не найден в nativeLibraryDir")
         val debianDir = getDebianDir().absolutePath
-        val appsDir = AppManager.appsDir.absolutePath
-        val sdcard = Environment.getExternalStorageDirectory().absolutePath
+        val appsDir = AppManager.appsDir.apply { if (!exists()) mkdirs() }.absolutePath
+        val cache = appContext?.cacheDir?.absolutePath ?: "/data/local/tmp"
+        val files = appContext?.filesDir?.absolutePath ?: "/data/local/tmp"
+        val nativeDir = appContext?.applicationInfo?.nativeLibraryDir
+        val loader = if (nativeDir != null) File(nativeDir, "libloader.so").absolutePath else ""
 
-        // $nativeLibraryDir/libproot.so -0 -r $debianDir -b /dev -b /proc -b /sys -b /storage/emulated/0:/sdcard -b $appsDir:/apps -w /apps /bin/bash -c "<cmd>"
-        return listOf(
-            proot,
-            "-0",
-            "-r", debianDir,
-            "-b", "/dev",
-            "-b", "/proc",
-            "-b", "/sys",
-            "-b", "$sdcard:/sdcard",
-            "-b", "$appsDir:/apps",
-            "-w", workDir,
-            "/bin/bash",
-            "-c",
-            cmd
-        )
+        val wrappedGuestCmd = "export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin; export HOME=/root; export TMPDIR=/tmp; export LANG=C.UTF-8; $cmd"
+        val quotedGuestCmd = "'" + wrappedGuestCmd.replace("'", "'\\''") + "'"
+
+        val hostScript = """
+            export HOME='$files'
+            export TMPDIR='/tmp'
+            export PROOT_TMP_DIR='$cache'
+            export PROOT_IGNORE_MISSING_BINDINGS=1
+            ${if (loader.isNotEmpty()) "export PROOT_LOADER='$loader'" else ""}
+            exec '$proot' --kill-on-exit -0 -l -r '$debianDir' -b /dev -b /proc -b /sys -b '$appsDir:/apps' -w '$workDir' /bin/sh -c $quotedGuestCmd
+        """.trimIndent()
+
+        return listOf("/system/bin/sh", "-c", hostScript)
     }
 
     fun applyEnvironment(env: MutableMap<String, String>) {
-        val cache = appContext?.cacheDir?.absolutePath ?: "/data/local/tmp"
-        env["HOME"] = "/root"
+        val ctx = appContext
+        val cache = ctx?.cacheDir?.absolutePath ?: "/data/local/tmp"
+        val files = ctx?.filesDir?.absolutePath ?: "/data/local/tmp"
+        val nativeDir = ctx?.applicationInfo?.nativeLibraryDir
+
+        // На хосте процесс u0_a... не имеет доступа к /root, поэтому HOME ставим во внутреннюю память приложения
+        env["HOME"] = files
         env["USER"] = "root"
         env["LOGNAME"] = "root"
-        env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        // Важно: сохраняем системный PATH хоста Android (/system/bin:/system/xbin:...) для PRoot
+        env["PATH"] = "/system/bin:/system/xbin:" + (env["PATH"] ?: "")
         env["TERM"] = "xterm-256color"
         env["LANG"] = "C.UTF-8"
         env["TMPDIR"] = "/tmp"
         env["PROOT_TMP_DIR"] = cache
-        env["SHELL"] = "/bin/bash"
+        env["PROOT_IGNORE_MISSING_BINDINGS"] = "1"
+        env["GLIBC_TUNABLES"] = "glibc.pthread.rseq=0"
+
+        if (nativeDir != null) {
+            val loader = File(nativeDir, "libloader.so")
+            if (loader.exists()) {
+                env["PROOT_LOADER"] = loader.absolutePath
+            }
+        }
         env.remove("LD_PRELOAD")
+        env.remove("PROOT_NO_SECCOMP")
     }
 
     fun uninstall(): Boolean {

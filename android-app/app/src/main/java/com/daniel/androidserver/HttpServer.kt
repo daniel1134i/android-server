@@ -452,8 +452,11 @@ class HttpServer(
         try {
             val pb = if (actualUseProot) {
                 val prootCmd = DebianManager.buildProotCommand(command, workDir = "/apps")
+                ServerService.addLog("[EXEC-PROOT] Запуск: ${prootCmd.joinToString(" ")}", "EXEC")
                 ProcessBuilder(prootCmd).apply {
+                    directory(context.filesDir)
                     DebianManager.applyEnvironment(environment())
+                    redirectErrorStream(true)
                 }
             } else {
                 ProcessBuilder("sh", "-c", command).apply {
@@ -461,21 +464,25 @@ class HttpServer(
                     env["HOME"] = context.filesDir.absolutePath
                     env["TMPDIR"] = context.cacheDir.absolutePath
                     env["PATH"] = "/system/bin:/system/xbin:" + (env["PATH"] ?: "")
+                    redirectErrorStream(true)
                 }
             }
-            pb.redirectErrorStream(false)
             val process = pb.start()
-
-            var stdout = ""
-            var stderr = ""
-            val outThread = Thread {
-                stdout = try { process.inputStream.bufferedReader().use { it.readText() } } catch (_: Exception) { "" }
+            val outputBuilder = StringBuilder()
+            val readerThread = Thread {
+                try {
+                    process.inputStream.bufferedReader().use { reader ->
+                        val buf = CharArray(4096)
+                        var n: Int
+                        while (reader.read(buf).also { n = it } != -1) {
+                            if (outputBuilder.length < 512 * 1024) {
+                                outputBuilder.append(buf, 0, n)
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
             }
-            val errThread = Thread {
-                stderr = try { process.errorStream.bufferedReader().use { it.readText() } } catch (_: Exception) { "" }
-            }
-            outThread.start()
-            errThread.start()
+            readerThread.start()
 
             val finished = try {
                 process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)
@@ -483,16 +490,18 @@ class HttpServer(
 
             if (!finished) {
                 try { process.destroyForcibly() } catch (_: Exception) {}
-                stderr += "\n[ТАЙМАУТ: процесс принудительно остановлен через 120 сек]"
             }
-            try { outThread.join(1000) } catch (_: Exception) {}
-            try { errThread.join(1000) } catch (_: Exception) {}
+            try { readerThread.join(2000) } catch (_: Exception) {}
+
+            val fullOutput = outputBuilder.toString().trimEnd()
+            val exitCode = if (finished) process.exitValue() else -1
+            ServerService.addLog("[EXEC-PROOT] Завершено: exit=$exitCode", "EXEC")
 
             result.put("command", command)
             result.put("backend", if (actualUseProot) "debian_proot" else "android_shell")
-            result.put("exit_code", if (finished) process.exitValue() else -1)
-            result.put("stdout", stdout)
-            result.put("stderr", stderr)
+            result.put("exit_code", exitCode)
+            result.put("stdout", fullOutput)
+            result.put("stderr", "")
             result.put("duration_ms", System.currentTimeMillis() - start)
         } catch (e: Exception) {
             result.put("command", command)

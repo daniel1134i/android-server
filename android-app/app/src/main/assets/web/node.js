@@ -149,11 +149,33 @@ function switchTab(targetTab) {
 }
 
 nodeTabs.forEach(tab => {
-  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+  const handler = (e) => {
+    if (e.type === 'touchend') e.preventDefault();
+    switchTab(tab.dataset.tab);
+  };
+  tab.addEventListener('click', handler);
+  tab.addEventListener('touchend', handler);
 });
 
 if (chipAppsLink) {
-  chipAppsLink.addEventListener('click', () => switchTab('apps'));
+  const handler = (e) => {
+    if (e.type === 'touchend') e.preventDefault();
+    switchTab('apps');
+  };
+  chipAppsLink.addEventListener('click', handler);
+  chipAppsLink.addEventListener('touchend', handler);
+}
+
+const badgeDebianEl = document.getElementById('badgeDebian');
+if (badgeDebianEl) {
+  badgeDebianEl.style.cursor = 'pointer';
+  badgeDebianEl.title = 'Перейти к Linux Debian 12 во вкладке Приложения';
+  const handler = (e) => {
+    if (e.type === 'touchend') e.preventDefault();
+    switchTab('apps');
+  };
+  badgeDebianEl.addEventListener('click', handler);
+  badgeDebianEl.addEventListener('touchend', handler);
 }
 
 // Опрос статуса сервера
