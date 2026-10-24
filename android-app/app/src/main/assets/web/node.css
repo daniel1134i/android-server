@@ -1,7 +1,7 @@
 @font-face {
-  font-family: 'Pixelify Sans';
-  src: url('PixelifySans-Bold.ttf') format('truetype');
-  font-weight: 400 700;
+  font-family: 'Pixel Cyr Normal';
+  src: url('PixelCyrNormal.ttf') format('truetype');
+  font-weight: normal;
   font-style: normal;
   font-display: swap;
 }
@@ -27,7 +27,7 @@
   --text-dim: #5f6368;
 
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, monospace;
-  --font-pixel: 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace;
+  --font-pixel: 'Pixel Cyr Normal', monospace;
 }
 
 * {
@@ -94,15 +94,16 @@ body {
   display: inline-flex;
   align-items: center;
   font-family: var(--font-pixel);
-  font-size: 14px;
+  font-size: 15px;
   letter-spacing: 0.5px;
 }
 
 .brand-server-text {
-  font-family: var(--font-pixel);
-  font-size: 14px;
+  font-family: 'Pixel Cyr Normal', var(--font-pixel), monospace;
+  font-size: 15px;
   color: var(--text-main);
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
 }
 
 .brand-title .highlight {
